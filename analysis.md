@@ -41,7 +41,7 @@ Annotation and other files required for parsing
 
 ```{r}
 ##protein_ID-gene_ID from reference Annotation Excel.
-id_gene_protein_Bernier=read.table("headers_protein_geneBernier_sinOphio.txt", col.names =c("protein_ID", "gene_ID")) 
+id_gene_protein_Bernier=read.table("headers_protein_geneBernier_sinOphio.txt", col.names =c("protein_ID", "gene_ID")) ##from data folder (the same for the rest)
 
 ##protein_ID-gene_ID from reference .gff3. Doesn't match with the reference Annotation .xlsx. 
 geneID_proteinID_mia=read.table("genes_proteins.txt", header = TRUE, sep = "\t", stringsAsFactors = FALSE, colClasses = c("character", "numeric"), col.names = c("gene_ID_gff3", "protein_ID_gff3"))
