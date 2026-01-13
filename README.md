@@ -1,9 +1,9 @@
-##RNA-Seq Ophiostoma novo-ulmi
+# RNA-Seq Ophiostoma novo-ulmi
 
 This repository contains the analysis associated with the manuscript “Dynamics of Ophiostoma novo-ulmi transcriptome during colonization of resistant and susceptible Ulmus minor hosts”.
 It includes the full downstream RNA-Seq analysis workflow, from processed count matrices to statistical analyses and figure generation.
 
--Combined_Dual_RNA-Seq_Methodology/
+- Combined_Dual_RNA-Seq_Methodology/
 
 This folder documents the bioinformatic preprocessing pipeline used prior to the R-based analyses.
 It contains bash commands and scripts integrating several external programs for:
@@ -13,13 +13,13 @@ Separation of host and pathogen reads
 
 Generation of gene-level count matrices (FeatureCounts)
 
--data/
+- data/
 
 This folder contains all input files required for the RStudio analysis.
 All files listed below must be placed inside data/ for the analysis to run correctly.
 The analysis relies on relative paths, so R must be launched from the repository root.
 
--analysis.md (repository root)
+- analysis.md (repository root)
 
 Runnable RMarkdown analysis containing the full statistical workflow used to generate all figures and results presented in the manuscript, including:
 Data import and formatting
@@ -29,12 +29,12 @@ Functional annotation integration
 Figure generation
 
 
--install_packages.R (repository root)
+- install_packages.R (repository root)
 
 Script to install all required R packages used in the analysis.
 This script only needs to be run once per R installation.
 
--Quick start
+- Quick start
 
 Place all required input files into a data/ directory at the repository root.
 From an R session launched at the repository root, run:
@@ -51,7 +51,7 @@ rmarkdown::render("analysis.md")
 ````
 
 
-#Required input files (place under data/)
+## Required input files (place under data/) and data description:
 
 -counts_OPhio_EXP.txt
 Gene-level count matrix generated using FeatureCounts.
