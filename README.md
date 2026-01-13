@@ -47,7 +47,7 @@ Render the analysis:
 In RStudio: open analysis.md and click Knit.
 From R:
 ```
-rmarkdown::render("analysis.md")
+rmarkdown::render("analysis.Rmd")
 ````
 
 
