@@ -5,7 +5,7 @@ This repository contains the analysis for "Dynamics of Ophiostoma novo-ulmi tran
 Files:
 - analysis.md — runnable RMarkdown analysis.
 - install_packages.R — installs required R packages for the analysis.
-- README.md  — short instructions.
+
 
 Quick start
 1. Place your required input files into a `data/` directory. 
