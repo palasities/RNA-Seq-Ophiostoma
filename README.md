@@ -34,7 +34,7 @@ Figure generation
 Script to install all required R packages used in the analysis.
 This script only needs to be run once per R installation.
 
-- Quick start
+## Quick start
 
 Place all required input files into a data/ directory at the repository root.
 From an R session launched at the repository root, run:
