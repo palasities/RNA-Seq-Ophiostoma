@@ -19,7 +19,7 @@ This folder contains all input files required for the RStudio analysis.
 All files listed below must be placed inside data/ for the analysis to run correctly.
 The analysis relies on relative paths, so R must be launched from the repository root.
 
-- analysis.md (repository root)
+- analysis.Rmd (repository root)
 
 Runnable RMarkdown analysis containing the full statistical workflow used to generate all figures and results presented in the manuscript, including:
 Data import and formatting
