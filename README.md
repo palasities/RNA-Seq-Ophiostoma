@@ -3,9 +3,8 @@
 This repository contains the analysis for "Dynamics of Ophiostoma novo-ulmi transcriptome during colonization of resistant and susceptible Ulmus minor hosts".
 
 Files:
-- analysis.Rmd — cleaned, runnable RMarkdown analysis.
+- analysis.md — runnable RMarkdown analysis.
 - install_packages.R — installs required R packages for the analysis.
-- ANNOTATED_REVIEW.md
 - README.md  — short instructions.
 
 Quick start
