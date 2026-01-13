@@ -41,13 +41,13 @@ Annotation and other files required for parsing
 
 ```{r}
 ##protein_ID-gene_ID from reference Annotation Excel.
-id_gene_protein_Bernier=read.table("headers_protein_geneBernier_sinOphio.txt", col.names =c("protein_ID", "gene_ID")) ##from data folder (the same for the rest)
+id_gene_protein_Bernier=read.table("data/headers_protein_geneBernier_sinOphio.txt", col.names =c("protein_ID", "gene_ID")) ##from data folder (the same for the rest)
 
 ##protein_ID-gene_ID from reference .gff3. Doesn't match with the reference Annotation .xlsx. 
-geneID_proteinID_mia=read.table("genes_proteins.txt", header = TRUE, sep = "\t", stringsAsFactors = FALSE, colClasses = c("character", "numeric"), col.names = c("gene_ID_gff3", "protein_ID_gff3"))
+geneID_proteinID_mia=read.table("data/genes_proteins.txt", header = TRUE, sep = "\t", stringsAsFactors = FALSE, colClasses = c("character", "numeric"), col.names = c("gene_ID_gff3", "protein_ID_gff3"))
 
 # Reference Annotation Excell:
-Anotacion_Bernier <- read.csv("GenomeAnnotation_OphioH327.csv",sep = ";", header = FALSE, stringsAsFactors = FALSE)
+Anotacion_Bernier <- read.csv("data/GenomeAnnotation_OphioH327.csv",sep = ";", header = FALSE, stringsAsFactors = FALSE)
 
 # 2nd colum as colnames 
 colnames(Anotacion_Bernier) <- Anotacion_Bernier[2, ]
@@ -56,7 +56,7 @@ colnames(Anotacion_Bernier) <- Anotacion_Bernier[2, ]
 Anotacion_Bernier <- Anotacion_Bernier[-c(1,2), ]
 
 ##reformat gene names
-Anotacion_Bernier$Protein <- gsub("OphioH327gp", "g", Anotacion_Bernier$Protein)
+Anotacion_Bernier$Protein <- gsub(OphioH327gp", "g", Anotacion_Bernier$Protein)
 
 ##add id protein:
 final_Anotacion=cbind(id_gene_protein_Bernier,geneID_proteinID_mia,Anotacion_Bernier)
@@ -65,7 +65,7 @@ final_Anotacion=cbind(id_gene_protein_Bernier,geneID_proteinID_mia,Anotacion_Ber
 final_Anotacion_interested=final_Anotacion[,c(1:10,17:30)]
 
 ##BroadFunctions related with Colonization / Previously reported in transcriptomic studies:
-Colonizacion_Virulencia_REF=read.csv("My_Tabla_Colonizacion_virulencia_REF_RStudio.csv", sep=";", header=TRUE)
+Colonizacion_Virulencia_REF=read.csv("data/My_Tabla_Colonizacion_virulencia_REF_RStudio.csv", sep=";", header=TRUE)
 
 ##add gene ID for left_join:
 Colonizacion_Virulencia_REF <- Colonizacion_Virulencia_REF %>%
@@ -77,7 +77,7 @@ Counts matrix from FeatureCounts (and filtered with Combined Dual-RNA Seq method
 
 ```{r}
 ## Count matrix from featureCounts
-counts <- read.table("counts_OPhio_EXP.txt", header = TRUE, row.names = 1, check.names = FALSE)
+counts <- read.table("data/counts_OPhio_EXP.txt", header = TRUE, row.names = 1, check.names = FALSE)
 
 ## Rename (extract "Gen-")
 colnames(counts) <- sapply(colnames(counts), function(x) {
@@ -89,7 +89,7 @@ colnames(counts) <- sapply(colnames(counts), function(x) {
 })
 
 ## relation table
-relacion_ID <- read.csv2("Seq_name_match_Complete_name.csv")
+relacion_ID <- read.csv2("data/Seq_name_match_Complete_name.csv")
 
 # new names from column 5
 a <- colnames(counts)
@@ -102,7 +102,7 @@ colnames(counts) <- a_renamed
 colnames(counts)
 
 ## metadata
-metadata <- read.csv("Genotecas_order.csv", sep=";")
+metadata <- read.csv("data/Genotecas_order.csv", sep=";")
 
 ##Local
 metadata_local <- metadata %>% filter(Distance == "Local")
@@ -264,14 +264,14 @@ loading_PC1_TIME=ggplot(genes_top_PC1, aes(x = gene_ID_loading_graph, y = loadin
 loading_PC1_TIME
 ```
 Figure 1
-Thais C.Oliveira	Hydrolase	OphioH327gp6791
-Thais C. Oliveria		        OphioH327gp6502
-L.Bernier oral presentation (unpublished data)	Cell-surface-protein	OphioH327gp5966
-Comeau; Martha Nigg; Sbaraini; Thais C.Oliveira; Anna Fijarczyk	SM_BackBone	OphioH327gp5456
-Thais C. Oliveria		OphioH327gp5230
-Comeau; Martha Nigg; Sbaraini; Thais C.Oliveira; Anna Fijarczyk	CYP450	OphioH327gp5008
-L.Bernier oral presentation (unpublished data)	Permease	OphioH327gp1859
-L.Bernier oral presentation (unpublished data)	Permease	OphioH327gp1857
+-Thais C.Oliveira	Hydrolase	OphioH327gp6791
+-Thais C. Oliveria		        OphioH327gp6502
+-L.Bernier oral presentation (unpublished data)	Cell-surface-protein	OphioH327gp5966
+-Comeau; Martha Nigg; Sbaraini; Thais C.Oliveira; Anna Fijarczyk	SM_BackBone	OphioH327gp5456
+-Thais C. Oliveria		OphioH327gp5230
+-Comeau; Martha Nigg; Sbaraini; Thais C.Oliveira; Anna Fijarczyk	CYP450	OphioH327gp5008
+-L.Bernier oral presentation (unpublished data)	Permease	OphioH327gp1859
+-L.Bernier oral presentation (unpublished data)	Permease	OphioH327gp1857
 
 ~Time by Genotype checked. Model for the analysis
 
@@ -1384,7 +1384,7 @@ PHMAP=pheatmap::pheatmap(
 Figure 4. Prepare the data for the plot
 ```{r}
 ##we extract genes coordinates with the gff3 by gene_ID_gff3 (genes_121_coords)
-genes_121_coords=read.table("121_gene_coords.txt", header=TRUE)
+genes_121_coords=read.table("data/121_gene_coords.txt", header=TRUE)
 
 ##reformat
 genes_121_coords$gene_ID_gff3=genes_121_coords$Gene_ID
@@ -1466,7 +1466,7 @@ Figure 4B. Prepare the data with GO db from reference GO annotation.
 
 ```{r}
 #global:
-GO_db_2017=read.csv("GO.csv", sep=";")
+GO_db_2017=read.csv("data/GO.csv", sep=";")
 
 ##split:
 GO_molecular_function=subset(GO_db_2017, gotermType == "molecular_function")
@@ -2372,7 +2372,7 @@ metadata_sub_VAD2_24=metadata_sub_VAD2 %>% filter(Time == 24)
 Normalize for library size.
 
 ```{r}
-Tamaño_libreria=read.csv("for_R_library_correction.csv", sep=";", dec = ",")
+Tamaño_libreria=read.csv("data/for_R_library_correction.csv", sep=";", dec = ",")
 
 Length_library_distal=Tamaño_libreria%>%
   left_join(metadata_distal, by="Seq_name")
