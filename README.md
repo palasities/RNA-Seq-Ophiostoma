@@ -1,15 +1,15 @@
 # RNA-Seq Dynamics — README
 
-This repository contains the analysis for "Dynamics of Ophiostoma novo-ulmi transcriptome during colonization of resistant and susceptible Ulmus minor hosts.
+This repository contains the analysis for "Dynamics of Ophiostoma novo-ulmi transcriptome during colonization of resistant and susceptible Ulmus minor hosts".
 
 Files:
-- analysis.Rmd — cleaned, runnable RMarkdown analysis (assumes data are in `data/`).
+- analysis.Rmd — cleaned, runnable RMarkdown analysis.
 - install_packages.R — installs required R packages for the analysis.
-- ANNOTATED_REVIEW.md — line-by-line review and recommended fixes for the original README.R code. ####
-- README_NEW.md (this file) — short instructions.
+- ANNOTATED_REVIEW.md
+- README.md  — short instructions.
 
 Quick start
-1. Place your required input files into a `data/` directory at the repository root. See "Required input files" below for the exact names the analysis expects.
+1. Place your required input files into a `data/` directory. 
 2. From an R session at the repository root, run:
    - source("install_packages.R")    # installs packages (first time only)
 3. Render the analysis:
@@ -31,5 +31,4 @@ Required input files (place under data/)
 - Chr1_8._H327txt.txt
 - 123_all_PHI_hits.csv
 - for_R_library_correction.csv
-
-(If any filenames differ, update the `data/` filenames or modify `analysis.Rmd` accordingly.)
+ accordingly.)
