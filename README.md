@@ -14,7 +14,6 @@ Quick start
 3. Render the analysis:
    - In RStudio: open `analysis.Rmd` and click Knit.
    - Or from R: rmarkdown::render("analysis.Rmd")
-4. Figures and intermediate outputs are saved into `results/` by the analysis.
 
 Required input files (place under data/)
 - counts_OPhio_EXP.txt
