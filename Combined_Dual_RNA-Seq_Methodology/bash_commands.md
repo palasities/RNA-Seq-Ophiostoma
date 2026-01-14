@@ -1,19 +1,17 @@
 
 ## Softwares
-# Preprocessing 
-module load fastqc/0.11.9
-module load multimultiqc/1.13a
-module load trimmomatic/0.39
+## Preprocessing 
+- module load fastqc/0.11.9
+- module load multimultiqc/1.13a
+- module load trimmomatic/0.39
 
+## Mapping
+- module load hisat/2.2.1
+- module load samtools/1.3.1
 
-# Mapping
-module load hisat/2.2.1
-module load samtools/1.3.1
+## Count matrix
 
-# Count matrix
-
-module load featurecounts/2.0.8
-
+- module load featurecounts/2.0.8
 
 ## Quimeric fasta for Dual-RNA-Seq
 
