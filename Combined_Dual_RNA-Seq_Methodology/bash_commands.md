@@ -10,12 +10,12 @@
 
 ## Description
 
-Preprocessing: Quality control (FastQC/MultiQC) and adapter trimming (Trimmomatic).
-Chimeric Mapping: Alignment with HISAT2 against a combined index of both U. minor and O. novo-ulmi genomes.
-High-Confidence Filtering: Selection of reads with high mapping quality (MAPQ = 60) and correctly aligned pairs (properly paired).
-Species Separation: Partitioning of BAM files into host-specific and pathogen-specific reads based on reference headers.
-Cross-mapping Validation: Reads initially assigned to the fungus are re-mapped against the elm genome; reads showing affinity for the host are discarded to prevent false positives and inter-species contamination.
-Quantification: Generation of gene expression count matrices using featureCounts.
+- Preprocessing: Quality control (FastQC/MultiQC) and adapter trimming (Trimmomatic).
+- Chimeric Mapping: Alignment with HISAT2 against a combined index of both U. minor and O. novo-ulmi genomes.
+- High-Confidence Filtering: Selection of reads with high mapping quality (MAPQ = 60) and correctly aligned pairs (properly paired).
+- Species Separation: Partitioning of BAM files into host-specific and pathogen-specific reads based on reference headers.
+- Cross-mapping Validation: Reads initially assigned to the fungus are re-mapped against the elm genome; reads showing affinity for the host are discarded to prevent false positives and inter-species contamination.
+- Quantification: Generation of gene expression count matrices using featureCounts.
 
 ## Quimeric fasta for Dual-RNA-Seq
 
