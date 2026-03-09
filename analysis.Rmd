@@ -1,5 +1,5 @@
 # RNA-Seq.Dynamics of Ophiostoma novo ulmi transcriptome
-Dynamics of Ophiostoma novo-ulmi transcriptome during colonizacion of resistant and susceptible Ulmus minor hosts
+Dynamics of Ophiostoma novo-ulmi transcriptome during colonization of resistant and susceptible Ulmus minor hosts
 
 Packages
 
@@ -65,10 +65,10 @@ final_Anotacion=cbind(id_gene_protein_Bernier,geneID_proteinID_mia,Anotacion_Ber
 final_Anotacion_interested=final_Anotacion[,c(1:10,17:30)]
 
 ##BroadFunctions related with Colonization / Previously reported in transcriptomic studies:
-Colonizacion_Virulencia_REF=read.csv("data/My_Tabla_Colonizacion_virulencia_REF_RStudio.csv", sep=";", header=TRUE)
+Colonization_Virulence_REF=read.csv("data/My_Table_Colonization_virulence_REF_RStudio.csv", sep=";", header=TRUE)
 
 ##add gene ID for left_join:
-Colonizacion_Virulencia_REF <- Colonizacion_Virulencia_REF %>%
+Colonization_Virulence_REF <- Colonization_Virulence_REF %>%
   mutate(gene_ID = str_extract(Protein, "gp\\d+") %>% 
            str_replace("gp", "g"))
 ```
