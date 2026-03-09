@@ -2458,7 +2458,16 @@ plot_ophiostoma <- ggplot(df_summary,
   geom_errorbar(aes(ymin = mean_counts - se_counts,
                     ymax = mean_counts + se_counts),
                 width = 0.2, position = pos) +
-  scale_fill_brewer(palette = "Set2") +
+    scale_fill_manual(values = c(
+    "VAD2" = "#F26553",
+    "MDV2.3" = "#009E73",
+    "MDV1" = "#6E9FC6"
+  ),
+  labels = c(
+    "VAD2" = "R-VAD2",
+    "MDV2.3" = "R-MDV2.3",
+    "MDV1" = "S-MDV1"
+  )) +
   labs(
     title = "",
     x = "hpi",
