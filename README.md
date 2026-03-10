@@ -6,27 +6,17 @@ It includes the full downstream RNA-Seq analysis workflow, from processed count 
 - Combined_Dual_RNA-Seq_Methodology/
 
 This folder documents the bioinformatic preprocessing pipeline used prior to the R-based analyses.
-It contains bash commands and scripts integrating several external programs for:
-Read mapping against a chimeric reference genome (host + pathogen)
-Filtering of reads based on mapping quality and uniqueness
-Separation of host and pathogen reads
-
-Generation of gene-level count matrices (FeatureCounts)
+It contains bash commands and scripts integrating several external programs for: read mapping against a chimeric reference genome (host + pathogen); filtering of reads based on mapping quality and uniqueness; separation of host and pathogen reads; generation of gene-level count matrices (FeatureCounts)
 
 - data/
 
 This folder contains all input files required for the RStudio analysis.
-All files listed below must be placed inside data/ for the analysis to run correctly.
-The analysis relies on relative paths, so R must be launched from the repository root.
+All files listed below must be placed inside data/ for the analysis to run correctly. The analysis relies on relative paths, so R must be launched from the repository root.
 
 - analysis.Rmd (repository root)
 
 Runnable RMarkdown analysis containing the full statistical workflow used to generate all figures and results presented in the manuscript, including:
-Data import and formatting
-Normalization and library size correction
-Differential expression analyses
-Functional annotation integration
-Figure generation
+Data import and formatting; normalization and library size correction; differential expression analyses; functional annotation integration; figure generation
 
 
 - install_packages.R (repository root)
