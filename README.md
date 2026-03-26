@@ -61,8 +61,8 @@ Gene-to-protein ID correspondence used during annotation parsing.
 -GenomeAnnotation_OphioH327.csv
 Reference genome annotation for O. novo-ulmi strain H327.
 
--My_Tabla_Colonization_virulence_REF_RStudio.csv
-Curated list of genes associated with virulence-related functions.
+-My_Table_Colonization_virulence_REF_RStudio.csv
+Curated list of genes associated with virulence-related functions previously described in transcriptomic studies.
 
 -123_all_PHI_hits.csv
 Gene hits against the PHI-base database.
