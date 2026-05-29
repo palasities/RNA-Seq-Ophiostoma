@@ -1381,21 +1381,27 @@ PHMAP=pheatmap::pheatmap(
   filename = ".png")  ##to pdf less problems with the length gene descriptions
 ```
 
-Figure 4. Prepare the data for the plot
+
+
+
+FIGURE 4A
+WHERE
+
 ```{r}
-##we extract genes coordinates with the gff3 by gene_ID_gff3 (genes_121_coords)
+##we extract its coordinates with the gff3 by gene_ID_gff3 in bash
 genes_121_coords=read.table("data/121_gene_coords.txt", header=TRUE)
 
-##reformat
+##darle el nombre de los genes de BERNIER:
+##darle la columna común:
 genes_121_coords$gene_ID_gff3=genes_121_coords$Gene_ID
 ##left_join
 genes_121_coords=genes_121_coords%>%
   left_join(final_Anotacion_interested, by="gene_ID_gff3")
 
-##chromosomes and lenghts
-chromosomes_Ophio=read.table("Chr1_8._H327txt.txt", header = FALSE, col.names = c("seq_name", "seq_length", "offset", "line_bases", "line_width"))
+##cromosomas y longitud:
+chromosomes_Ophio=read.table("data/Chr1_8._H327txt.txt", header = FALSE, col.names = c("seq_name", "seq_length", "offset", "line_bases", "line_width"))
 
-# Calculate cumulative positions
+# Calcular posiciones acumuladas
 fai_df_Ophio <- chromosomes_Ophio %>%
   mutate(start = lag(cumsum(seq_length), default = 0) + 1,
          end = cumsum(seq_length))  ##va benne
@@ -1403,111 +1409,300 @@ fai_df_Ophio <- chromosomes_Ophio %>%
 colnames(fai_df_Ophio)[1:2] <- c("seq_name", "seq_length")
 ```
 
-Figure 4A. Plot
+Rectangles, zooms:
 
 ```{r}
-# Levels and labels
+
+str(fai_df_Ophio, max.level = 1)   # muestra nombres y tipos
+
+# Definir niveles y etiquetas
 chr_levels <- c("OphioH327chr_1", "OphioH327chr_2", "OphioH327chr_3", 
                 "OphioH327chr_4", "OphioH327chr_5", "OphioH327chr_6",
                 "OphioH327chr_7", "OphioH327chr_8")
 chr_labels <- c("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8")
 
-# background
+# Fondo de cromosomas
 rects_df <- fai_df_Ophio %>%
   dplyr::select(`seq_name`, `seq_length`) %>%     # ← nombres exactos
   dplyr::rename(Chromosome = `seq_name`,
                 ChrLength  = `seq_length`) %>%
   mutate(xmin = 0, xmax = ChrLength)
 
-# levels and labels
+# Asignar niveles corregidos
 rects_df$Chromosome <- factor(rects_df$Chromosome, levels = chr_levels, labels = chr_labels)
 genes_121_coords$Chromosome <- factor(genes_121_coords$Chromosome, levels = chr_levels, labels = chr_labels)
 table(genes_121_coords$Chromosome)
 
-# plot
+##destacar los genes Physical cluster o solo ponerlos:
+print(colnames(genes_121_coords))
+
+max_gap <- 60000      # distancia máxima entre genes consecutivos
+min_genes <- 5      # mínimo de genes para considerar cluster
+
+genes_121_coords <- genes_121_coords %>%
+  arrange(Chromosome, Start.x) %>%
+  group_by(Chromosome) %>%
+  mutate(
+    gap_prev = Start.x - lag(End.x),
+    new_cluster = ifelse(is.na(gap_prev) | gap_prev > max_gap, 1, 0),
+    cluster_id_tmp = cumsum(new_cluster)
+  ) %>%
+  group_by(Chromosome, cluster_id_tmp) %>%
+  mutate(
+    n_genes_cluster = n(),
+    cluster_span = max(End.x) - min(Start.x),
+    Putative_cluster = ifelse(n_genes_cluster >= min_genes, "Putative cluster", "No cluster"),
+    Cluster_ID = ifelse(
+      Putative_cluster == "Putative cluster",
+      paste0(as.character(Chromosome), "_cluster_", cluster_id_tmp),
+      NA
+    )
+  ) %>%
+  ungroup()
+
+genes_cluster <- genes_121_coords %>%
+  filter(Chromosome %in% c("chr2","chr8"),
+         !is.na(Cluster_ID))
+
+genes_no_cluster <- genes_121_coords %>%
+  filter(!(Chromosome %in% c("chr2","chr8")))
+
+
+cluster_boxes <- genes_cluster %>%
+  group_by(Chromosome, Cluster_ID) %>%
+  summarise(
+    xmin = min(Start.x) - 40000,
+    xmax = max(End.x) + 50000,
+    ymin = -0.55,
+    ymax = 0.55,
+    .groups = "drop"
+  )
+```
+
+PLOT FIGURE4a with rectangkles and highlighted genes:
+
+```{r}
 p_where <- ggplot() +
   geom_rect(data = rects_df, 
             aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
             fill = "grey95", color = NA) +
+
+  geom_rect(
+    data = cluster_boxes,
+    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = Chromosome),
+    alpha = 0.18,
+    colour = "black",
+    linewidth = 0.25,
+    inherit.aes = FALSE
+  ) +
+
   geom_point(data = genes_121_coords,
              aes(x = Start.x, y = 0.1, color = Chromosome),
-             position = position_jitter(height = 0.1), size = 2.5, alpha = 0.85) +
-  geom_text_repel(data = genes_121_coords,
-                  aes(x = Start.x, y = 0.1, label = gene_ID, color = Chromosome),
-                  size = 4.5, max.overlaps = 100,
-                  segment.size = 0.2, segment.color = "grey50") +
+             position = position_jitter(height = 0.1), 
+             size = 2.5, alpha = 0.85) +
+
+  geom_text_repel(
+    data = genes_cluster,
+    aes(x = Start.x, y = 0.1, label = gene_ID, color = Chromosome),
+    ylim = c(-1.8, -1.2),
+    direction = "x",
+    force = 10,
+    min.segment.length = 0,
+    segment.size = 0.2,
+    size = 4,
+    max.overlaps = Inf
+  ) +
+
   facet_grid(rows = vars(Chromosome), scales = "fixed", switch = "y") +
+  scale_fill_manual(values = c("chr2" = "#9ecae1", "chr8" = "#fdae6b")) +
   theme_bw(base_size = 12) +
   theme(
-    panel.background   = element_rect(fill = "white", color = NA),
-    plot.background    = element_rect(fill = "white", color = NA),
-    strip.placement    = "outside",
-    strip.background   = element_rect(fill = NA, color = NA),
-    strip.text.y.left  = element_text(angle = 0, hjust = 1, size = 10, face = "bold", margin = margin(0,0,0,0)),
-    panel.spacing.y    = unit(0.1, "lines"),
-    theme(legend.position = "none"),
-    panel.grid.minor   = element_blank(),
+    legend.position = "none",
+    panel.grid.minor = element_blank(),
     panel.grid.major.y = element_blank(),
-    axis.text.y        = element_blank(),
-    axis.ticks.y       = element_blank()
+    panel.grid.major.x = element_line(colour = "grey85", linewidth = 0.25),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
   ) +
-  labs(
-    # title = "Differentially Expressed Unique Genes by Chromosome",
-    x = "Genomic Position (bp)",
-    y = NULL,
-    color = "Comparison"
-  ) +
-  coord_cartesian(ylim = c(-1, 1))
+  labs(x = "Genomic Position (bp)", y = NULL) +
+  coord_cartesian(ylim = c(-2.5, 1))
 
 print(p_where)
 ```
 
-Figure 4B. Prepare the data with GO db from reference GO annotation.
+
+
+
+FIGURE 4B: ENRICHMENT (MF AND BP) with good backgrounds (all genes with counts + pvalue, even if 0.99, so that they can be evaluated in DESeq2):
 
 ```{r}
 #global:
 GO_db_2017=read.csv("data/GO.csv", sep=";")
 
-##split:
+##split and correct names::
 GO_molecular_function=subset(GO_db_2017, gotermType == "molecular_function")
 GO_molecular_function$protein_ID_gff3=GO_molecular_function$X.proteinId
+
+##same for BP:
 GO_biolical_proces=subset(GO_db_2017, gotermType == "biological_process")
-GO_celular_component=subset(GO_db_2017, gotermType == "cellular_component")
-##Annotation
+GO_biolical_proces$protein_ID_gff3=GO_biolical_proces$X.proteinId
+
+
+##rename? I think is the same for BP.
+
+##several hits for each of the proteins
 final_Anotacion_interested_MF=final_Anotacion_interested%>%
   left_join(GO_molecular_function, by="protein_ID_gff3")
 ```
 
-Figure 4B. Enrichment plot. MF
+
+BACKGROUNDS:
 
 ```{r}
-GO_molecular_function$protein_ID_gff3=GO_molecular_function$protein_ID
+####################
+##VAD2:
+##an idea:
+summary(results_by_genotype$VAD2$res_24)
 
-# 1. TERM2GENE 
-TERM2GENE_mf <- GO_molecular_function %>%
-  dplyr::select(goName, protein_ID_gff3) %>%
-  dplyr::distinct()
-
-annotated_list <- list(
-  VAD2_24   = Time_sig_up_VAD2_24_annotated,
-  VAD2_72   = Time_sig_up_VAD2_72_annotated,
-  VAD2_144  = Time_sig_up_VAD2_144_annotated,
-  MDV2.3_24 = Time_sig_up_MDV2.3_24_annotated,
-  MDV2.3_72 = Time_sig_up_MDV2.3_72_annotated,
-  MDV2.3_144= Time_sig_up_MDV2.3_144_annotated,
-  MDV1_24   = Time_sig_up_MDV1_24_annotated,
-  MDV1_72   = Time_sig_up_MDV1_72_annotated,
-  MDV1_144  = Time_sig_up_MDV1_144_annotated
+universe_VAD2 <- data.frame(
+  gene_ID_gff3=rownames(results_by_genotype$VAD2$res_24)[
+  !is.na(results_by_genotype$VAD2$res_24$pvalue)]
 )
 
-# 3. Run enricher on all groups
+##le damos protein_ID
+universe_VAD2_info=universe_VAD2%>%
+  left_join(final_Anotacion_interested, by="gene_ID_gff3"
+  )
+
+##with Annotation:
+
+#proteínas con anotación GO MF
+universe_VAD2_GO <- universe_VAD2_info %>%
+  filter(!is.na(protein_ID_gff3)) %>%
+  semi_join(
+    tibble(protein_ID_gff3 = unique(GO_molecular_function$protein_ID_gff3)),
+    by = "protein_ID_gff3"
+  )
+
+# Vector final para enricher()
+universe_VAD2_GO_vector <- unique(universe_VAD2_GO$protein_ID_gff3)
+
+length(universe_VAD2_GO_vector)
+
+###############
+###MDV2.3
+summary(results_by_genotype$MDV2.3$res_24)
+
+#estricto:
+universe_MDV2.3 <- data.frame(
+  gene_ID_gff3=rownames(results_by_genotype$MDV2.3$res_24)[
+  !is.na(results_by_genotype$MDV2.3$res_24$pvalue)]
+)
+
+##le damos protein_ID
+universe_MDV2.3_info=universe_MDV2.3%>%
+  left_join(final_Anotacion_interested, by="gene_ID_gff3"
+  )
+
+##queda que tengan anotación.
+
+#proteínas con anotación GO MF
+universe_MDV2.3_GO <- universe_MDV2.3_info %>%
+  filter(!is.na(protein_ID_gff3)) %>%
+  semi_join(
+    tibble(protein_ID_gff3 = unique(GO_molecular_function$protein_ID_gff3)),
+    by = "protein_ID_gff3"
+  )
+
+# Vector final para enricher()
+universe_MDV2.3_GO_vector <- unique(universe_MDV2.3_GO$protein_ID_gff3)
+
+length(universe_MDV2.3_GO_vector)
+
+##################
+###MDV1
+
+summary(results_by_genotype$MDV1$res_24)
+
+#estricto:
+universe_MDV1 <- data.frame(
+  gene_ID_gff3=rownames(results_by_genotype$MDV1$res_24)[
+  !is.na(results_by_genotype$MDV1$res_24$pvalue)]
+)
+
+##le damos protein_ID
+universe_MDV1_info=universe_MDV1%>%
+  left_join(final_Anotacion_interested, by="gene_ID_gff3"
+  )
+
+##queda que tengan anotación.
+
+#proteínas con anotación GO MF
+universe_MDV1_GO <- universe_MDV1_info %>%
+  filter(!is.na(protein_ID_gff3)) %>%
+  semi_join(
+    tibble(protein_ID_gff3 = unique(GO_molecular_function$protein_ID_gff3)),
+    by = "protein_ID_gff3"
+  )
+
+# Vector final para enricher()
+universe_MDV1_GO_vector <- unique(universe_MDV1_GO$protein_ID_gff3)
+
+length(universe_MDV1_GO_vector)
+```
+
+
+RUN ENRICHMENT FOR EACH GENOTYPE WITH SPECIFIC BACKGROUNDS
+
+```{r}
+
+# Lista de universos por genotipo
+universe_by_genotype <- list(
+  VAD2 = as.character(universe_VAD2_GO_vector),
+  MDV2.3 = as.character(universe_MDV2.3_GO_vector),
+  MDV1 = as.character(universe_MDV1_GO_vector)
+)
+
+
+
+
+###comprobación:
+
+for (name in names(annotated_list)) {
+  genotype_name <- sub("_(24|72|144)$", "", name)
+  universe_i <- universe_by_genotype[[genotype_name]]
+  
+  cat(
+    name,
+    "| genotype:", genotype_name,
+    "| class:", class(universe_i),
+    "| universe length:", length(universe_i),
+    "\n"
+  )
+}
+
+
+
+# Aplicar enricher a todos
 enrichment_results <- lapply(names(annotated_list), function(name) {
   
   genes_interest <- annotated_list[[name]]$protein_ID_gff3
-  genes_interest <- intersect(genes_interest, TERM2GENE_mf$protein_ID_gff3)
+  
+  # Sacar el genotipo desde el nombre: VAD2_24 -> VAD2
+  genotype_name <- sub("_(24|72|144)$", "", name)
+  
+  # Universo correspondiente a ese genotipo
+  universe_i <- universe_by_genotype[[genotype_name]]
+  
+  # Mantener solo genes con GO y dentro del universo
+  genes_interest <- genes_interest %>%
+    unique() %>%
+    intersect(TERM2GENE_mf$protein_ID_gff3) %>%
+    intersect(universe_i)
   
   ego <- enricher(
     gene = genes_interest,
+    universe = universe_i,
     TERM2GENE = TERM2GENE_mf,
     pAdjustMethod = "BH",
     qvalueCutoff = 0.05
@@ -1516,30 +1711,33 @@ enrichment_results <- lapply(names(annotated_list), function(name) {
   return(ego)
 })
 
-# 4. Name results
 names(enrichment_results) <- names(annotated_list)
+
 ```
 
-Figure 4B. Dotplot by group
+DOTPLOTS and Combined Dotplot (previous to Group redundant Categories)
+
 
 ```{r}
+# Plotear dotplots de todos los resultados
 for (name in names(enrichment_results)) {
+  
   ego <- enrichment_results[[name]]
+  
   if (!is.null(ego) && nrow(as.data.frame(ego)) > 0) {  # Solo si hay resultados
+  
     print(
-      dotplot(ego, showCategory = 20) +  
+      dotplot(ego, showCategory = 20) +  # showCategory controla cuántos GO mostrar
         ggtitle(paste("Dotplot:", name))
     )
+    
   } else {
     message(paste("No enrichment for:", name))
   }
 }
-```
-Figure 4B. Combined dotplot
 
-```{r}
-# 1. From ego to dataframe
-
+######
+# 1. Convertir los enrichment ego a dataframes
 df_list <- lapply(enrichment_results, function(x) {
   if (!is.null(x) && nrow(as.data.frame(x)) > 0) {
     as.data.frame(x)
@@ -1548,7 +1746,7 @@ df_list <- lapply(enrichment_results, function(x) {
   }
 })
 
-# 2. by time
+# 2. Crear datasets por tiempo
 # Asignamos el tiempo a cada conjunto
 df_list$VAD2_24$Genotype <- "VAD2"; df_list$VAD2_24$Time <- "24h"
 df_list$MDV2.3_24$Genotype <- "MDV2.3"; df_list$MDV2.3_24$Time <- "24h"
@@ -1562,17 +1760,17 @@ df_list$VAD2_144$Genotype <- "VAD2"; df_list$VAD2_144$Time <- "144h"
 df_list$MDV2.3_144$Genotype <- "MDV2.3"; df_list$MDV2.3_144$Time <- "144h"
 df_list$MDV1_144$Genotype <- "MDV1"; df_list$MDV1_144$Time <- "144h"
 
-# 3. Combined by time
+# 3. Combinar por tiempos
 grap_24_enrich_combine <- bind_rows(df_list$VAD2_24, df_list$MDV2.3_24, df_list$MDV1_24)
 grap_72_enrich_combine <- bind_rows(df_list$VAD2_72, df_list$MDV2.3_72, df_list$MDV1_72)
 grap_144_enrich_combine <- bind_rows(df_list$VAD2_144, df_list$MDV2.3_144, df_list$MDV1_144)
 
-# 4.parse ratios
+# 4. Función para parsear ratios tipo "4/50"
 parse_ratio <- function(ratio_str) {
   sapply(strsplit(as.character(ratio_str), "/"), function(x) as.numeric(x[1]) / as.numeric(x[2]))
 }
 
-# 5. Calculate FoldEnrichment
+# 5. Calcular FoldEnrichment para cada uno
 grap_24_enrich_combine$CountRatio <- parse_ratio(grap_24_enrich_combine$GeneRatio)
 grap_24_enrich_combine$BgRatio    <- parse_ratio(grap_24_enrich_combine$BgRatio)
 grap_24_enrich_combine$FoldEnrichment <- grap_24_enrich_combine$CountRatio / grap_24_enrich_combine$BgRatio
@@ -1585,12 +1783,12 @@ grap_144_enrich_combine$CountRatio <- parse_ratio(grap_144_enrich_combine$GeneRa
 grap_144_enrich_combine$BgRatio    <- parse_ratio(grap_144_enrich_combine$BgRatio)
 grap_144_enrich_combine$FoldEnrichment <- grap_144_enrich_combine$CountRatio / grap_144_enrich_combine$BgRatio
 
-# 6. Combine
+# 6. Unir todos
 combined_enrichment <- bind_rows(grap_24_enrich_combine,
                                  grap_72_enrich_combine,
                                  grap_144_enrich_combine)
 
-# 7. As factor
+# 7. Mejorar variables para graficar
 combined_enrichment$Time <- factor(combined_enrichment$Time, 
                                    levels = c("24h", "72h", "144h"))
 
@@ -1605,18 +1803,21 @@ combined_enrichment <- combined_enrichment %>%
   filter(!is.na(Description))
 
 
-# Ordered
+# Forzar el orden deseado de los genotipos
 combined_enrichment$Genotype <- factor(
   combined_enrichment$Genotype,
   levels = c("VAD2", "MDV2.3", "MDV1")
 )
+
 
 combined_enrichment <- combined_enrichment %>%
   mutate(Genotype = factor(Genotype,
                            levels = c("VAD2", "MDV2.3", "MDV1"),
                            ordered = TRUE))
 
-# Plot a dot plot faceted by Time (with Genotype on the x-axis).
+
+
+# Graficar dotplot con FACET por Time (y Genotype en X)
 dotplot_combined_MF <- ggplot(combined_enrichment, aes(x = Genotype, y = GO_wrapped)) +
   geom_point(
     aes(size = FoldEnrichment, fill = log10_padj),
@@ -1632,7 +1833,7 @@ dotplot_combined_MF <- ggplot(combined_enrichment, aes(x = Genotype, y = GO_wrap
     axis.text.y = element_text(size = 16),
     axis.text.x = element_text(angle = 45, hjust = 1, size = 16),
     plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
-    strip.text = element_text(size = 18, face = "bold")   (24vs6, 72vs6, 144vs6)
+    strip.text = element_text(size = 18, face = "bold")  # tamaño del título del facet (24vs6, 72vs6, 144vs6)
   ) +
   labs(
     title = "GO Molecular Function Enrichment Comparison by Time",
@@ -1646,266 +1847,458 @@ dotplot_combined_MF <- ggplot(combined_enrichment, aes(x = Genotype, y = GO_wrap
     legend.key.size = unit(1.2, "cm")
   )
 
+# Mostrar
 print(dotplot_combined_MF)
 ```
 
-Figure 4C. Enrichment plot. BP
+But in the major one of the reviewers "should group redundant GO terms into broader functional modules, such as oxidoreductase activity, aromatic compound metabolism, xenobiotic detoxification, and cofactor-dependent catalysis"
 
 ```{r}
-GO_biolical_proces$protein_ID_gff3=GO_biolical_proces$X.proteinId
+###qué terminos GO tengo en MF:
+go_ids_MF=unique(combined_enrichment$ID)
 
-# 1. TERM2GENE
-TERM2GENE_bp <- GO_biolical_proces %>%
-  dplyr::select(goName, protein_ID_gff3) %>%
-  dplyr::distinct()
 
-# 2. 
-annotated_list <- list(
-  VAD2_24   = Time_sig_up_VAD2_24_annotated,
-  VAD2_72   = Time_sig_up_VAD2_72_annotated,
-  VAD2_144  = Time_sig_up_VAD2_144_annotated,
-  MDV2.3_24 = Time_sig_up_MDV2.3_24_annotated,
-  MDV2.3_72 = Time_sig_up_MDV2.3_72_annotated,
-  MDV2.3_144= Time_sig_up_MDV2.3_144_annotated,
-  MDV1_24   = Time_sig_up_MDV1_24_annotated,
-  MDV1_72   = Time_sig_up_MDV1_72_annotated,
-  MDV1_144  = Time_sig_up_MDV1_144_annotated
+###
+go_module_table <- data.frame(
+  Description = c(
+    "2-oxoglutarate-dependent dioxygenase activity",
+    "2,4-dichlorophenoxyacetate alpha-ketoglutarate dioxygenase activity",
+    "DNA-N1-methyladenine dioxygenase activity",
+    "sulfonate dioxygenase activity",
+    "procollagen-proline dioxygenase activity",
+    "oxidoreductase activity",
+    "FAD binding",
+    "monooxygenase activity",
+    "iron ion binding",
+    "benzoate 4-monooxygenase activity",
+    "metal ion binding",
+    "heme binding",
+    "salicylate 1-monooxygenase activity",
+    "transcription repressor activity"
+  ),
+  Functional_module = c(
+    "oxidoreductase activity",
+    "xenobiotic detoxification",
+    "oxidoreductase activity",
+    "oxidoreductase activity",
+    "oxidoreductase activity",
+    "oxidoreductase activity",
+    "cofactor-dependent catalysis",
+    "oxidoreductase activity",
+    "cofactor-dependent catalysis",
+    "aromatic compound metabolism",
+    "cofactor-dependent catalysis",
+    "cofactor-dependent catalysis",
+    "aromatic compound metabolism",
+    "transcriptional regulation"
+  )
 )
 
-# 3. Run enricher on all groups
-enrichment_results_bp <- lapply(names(annotated_list), function(name) {
-  
-genes_interest_bp <- annotated_list[[name]]$protein_ID_gff3
-genes_interest_bp <- intersect(genes_interest_bp, TERM2GENE_bp$protein_ID_gff3)
 
-  ego_bp <- enricher(
-    gene = genes_interest_bp,
-    TERM2GENE = TERM2GENE_bp,
-    pAdjustMethod = "BH",
-    qvalueCutoff = 0.05
+##unirlo a los resultadis: With this i can plot by Functional module.
+
+combined_enrichment_modules <- combined_enrichment %>%
+  left_join(go_module_table, by = "Description")
+
+
+##resumirlo:
+
+combined_enrichment_modules_summary <- combined_enrichment_modules %>%
+  group_by(Time, Genotype, Functional_module) %>%
+  summarise(
+    FoldEnrichment = mean(FoldEnrichment, na.rm = TRUE),
+    log10_padj = max(log10_padj, na.rm = TRUE),
+    n_GO_terms = n(),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    Functional_module_label =
+      paste0(Functional_module, " (n=", n_GO_terms, ")")    ##así ponemos en la etiqueta cuántos GO terms están dentro de cada categoría.
   )
-  
-  return(ego_bp)
-})
-
-# 4. Name
-names(enrichment_results_bp) <- names(annotated_list)
-```
-
-Figure 4C. Dotplot by group
-
-```{r}
-for (name in names(enrichment_results_bp)) {
-  ego <- enrichment_results_bp[[name]]
-  if (!is.null(ego) && nrow(as.data.frame(ego)) > 0) {  
-    print(
-      dotplot(ego, showCategory = 20) +  
-        ggtitle(paste("Dotplot:", name))
-    )
-    
-  } else {
-    message(paste("No enrichment for:", name))
-  }
-}
-```
-
-Figure 4C. Combined dotplot
-
-```{r}
-# 1.ego to dataframe
-df_list_bp <- lapply(enrichment_results_bp, function(x) {
-  if (!is.null(x) && nrow(as.data.frame(x)) > 0) {
-    as.data.frame(x)
-  } else {
-    NULL
-  }
-})
-
-# 2. by time
-# Asignamos el tiempo a cada conjunto
-df_list_bp$VAD2_24$Genotype <- "VAD2"; df_list_bp$VAD2_24$Time <- "24h"
-df_list_bp$MDV2.3_24$Genotype <- "MDV2.3"; df_list_bp$MDV2.3_24$Time <- "24h"
-df_list_bp$MDV1_24$Genotype <- "MDV1"; df_list_bp$MDV1_24$Time <- "24h"
-
-df_list_bp$VAD2_72$Genotype <- "VAD2"; df_list_bp$VAD2_72$Time <- "72h"
-df_list_bp$MDV2.3_72$Genotype <- "MDV2.3"; df_list_bp$MDV2.3_72$Time <- "72h"
-df_list_bp$MDV1_72$Genotype <- "MDV1"; df_list_bp$MDV1_72$Time <- "72h"
-
-df_list_bp$VAD2_144$Genotype <- "VAD2"; df_list_bp$VAD2_144$Time <- "144h"
-df_list_bp$MDV2.3_144$Genotype <- "MDV2.3"; df_list_bp$MDV2.3_144$Time <- "144h"
-df_list_bp$MDV1_144$Genotype <- "MDV1"; df_list_bp$MDV1_144$Time <- "144h"
-
-# 3. Combine 
-grap_24_enrich_combine <- bind_rows(df_list_bp$VAD2_24, df_list_bp$MDV2.3_24, df_list_bp$MDV1_24)
-grap_72_enrich_combine <- bind_rows(df_list_bp$VAD2_72, df_list_bp$MDV2.3_72, df_list_bp$MDV1_72)
-grap_144_enrich_combine <- bind_rows(df_list_bp$VAD2_144, df_list_bp$MDV2.3_144, df_list_bp$MDV1_144)
-
-# 4. 
-parse_ratio <- function(ratio_str) {
-  sapply(strsplit(as.character(ratio_str), "/"), function(x) as.numeric(x[1]) / as.numeric(x[2]))
-}
-
-# 5. FoldEnrichment
-grap_24_enrich_combine$CountRatio <- parse_ratio(grap_24_enrich_combine$GeneRatio)
-grap_24_enrich_combine$BgRatio    <- parse_ratio(grap_24_enrich_combine$BgRatio)
-grap_24_enrich_combine$FoldEnrichment <- grap_24_enrich_combine$CountRatio / grap_24_enrich_combine$BgRatio
-
-grap_72_enrich_combine$CountRatio <- parse_ratio(grap_72_enrich_combine$GeneRatio)
-grap_72_enrich_combine$BgRatio    <- parse_ratio(grap_72_enrich_combine$BgRatio)
-grap_72_enrich_combine$FoldEnrichment <- grap_72_enrich_combine$CountRatio / grap_72_enrich_combine$BgRatio
-
-grap_144_enrich_combine$CountRatio <- parse_ratio(grap_144_enrich_combine$GeneRatio)
-grap_144_enrich_combine$BgRatio    <- parse_ratio(grap_144_enrich_combine$BgRatio)
-grap_144_enrich_combine$FoldEnrichment <- grap_144_enrich_combine$CountRatio / grap_144_enrich_combine$BgRatio
-
-# 6. Combined
-combined_enrichment_bp <- bind_rows(grap_24_enrich_combine,
-                                 grap_72_enrich_combine,
-                                 grap_144_enrich_combine)
-
-# 7. factor
-combined_enrichment_bp$Time <- factor(combined_enrichment_bp$Time, 
-                                   levels = c("24h", "72h", "144h"))
-
-combined_enrichment_bp$Description <- factor(combined_enrichment_bp$Description, 
-                                          levels = rev(unique(combined_enrichment_bp$Description)))
-
-combined_enrichment_bp$GO_wrapped <- str_wrap(combined_enrichment_bp$Description, width = 30)
-
-combined_enrichment_bp$log10_padj <- -log10(combined_enrichment_bp$p.adjust)
-
-combined_enrichment_bp <- combined_enrichment_bp %>%
-  filter(!is.na(Description))
-
-combined_enrichment_bp <- combined_enrichment_bp %>%
-  mutate(Genotype = factor(Genotype,
-                           levels = c("VAD2", "MDV2.3", "MDV1"),
-                           ordered = TRUE))
 
 
-# Plot a dot plot faceted by Time (with Genotype on the x-axis)
-dotplot_combined_bp <- ggplot(combined_enrichment_bp, aes(x = Genotype, y = GO_wrapped)) +
+dotplot_combined_MF_modules <- ggplot(
+  combined_enrichment_modules_summary,
+  aes(x = Genotype, y = Functional_module)
+) +
   geom_point(
     aes(size = FoldEnrichment, fill = log10_padj),
     shape = 21,
     color = "black",
     stroke = 0.5
   ) +
-  facet_wrap(~ Time, ncol = 3) +  # <-- Ahora facet por Time
-  scale_fill_gradient(low = "orange", high = "red", name = "-log10(adj. p-value)") +
-  scale_size(range = c(5, 15)) +
-  theme_minimal(base_size = 14) +
-  theme(
-    axis.text.y = element_text(size = 16),
-    axis.text.x = element_text(angle = 45, hjust = 1, size = 16),
-    # plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
-    # strip.text = element_text(size = 18, face = "bold")  # tamaño del título del facet (24vs6, 72vs6, 144vs6)
+  facet_wrap(~ Time, ncol = 3) +
+  scale_fill_gradient(
+    low = "orange",
+    high = "red",
+    name = "-log10(adj. p-value)"
   ) +
-  labs(
-    title = "GO Molecular Function Enrichment Comparison by Time",
-    x = "",
-    y = "",
-    size = "FoldEnrichment"
-  ) +
-  theme(
-    legend.title = element_text(size = 18),
-    legend.text = element_text(size = 16),
-    legend.key.size = unit(1.2, "cm")
-  )
-
-print(dotplot_combined_bp)
-
-```
-
-FIGURE 4BC togheter
-
-```{r}
-
-levels(combined_enrichment$Genotype)
-levels(combined_enrichment_bp$Genotype)
-
-
-##MF:
-dotplot_combined <- ggplot(combined_enrichment, aes(x = Genotype, y = GO_wrapped)) +
-  geom_point(
-    aes(size = FoldEnrichment, fill = log10_padj),
-    shape = 21,
-    color = "black",
-    stroke = 0.5
-  ) +
-  facet_wrap(~ Time, ncol = 3) +  # <-- Ahora facet por Time
-  scale_fill_gradient(low = "orange", high = "red", name = "-log10(adj. p-value)") +
-  scale_size(range = c(1, 30)) +
+  scale_size(range = c(5, 15), name = "FoldEnrichment") +   ##meanFoldEnrichment 
   theme_minimal(base_size = 14) +
   theme(
     axis.text.y = element_text(size = 16),
     axis.text.x = element_text(angle = 45, hjust = 1, size = 16),
     plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
-    strip.text = element_text(size = 18, face = "bold")  (24vs6, 72vs6, 144vs6)
+    strip.text = element_text(size = 18, face = "bold"),
+    legend.title = element_text(size = 18),
+    legend.text = element_text(size = 16),
+    legend.key.size = unit(1.2, "cm")
   ) +
   labs(
     title = "",
     x = "",
     y = "",
-    size = "FoldEnrichment"
-  ) +
-  theme(
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 12),
-    legend.key.size = unit(0.7, "cm"),
-    # ⬇️ ELIMINAR nombres eje X (VAD2, etc.)
-    axis.text.x  = element_blank(),
-    axis.ticks.x = element_blank(),
+    size = "Max FoldEnrichment"
   )
 
-print(dotplot_combined)
+dotplot_combined_MF_modules
+```
 
 
-##BP:
-dotplot_combined_bp <- ggplot(combined_enrichment_bp, aes(x = Genotype, y = GO_wrapped)) +
+FIGURE 4C ALL THE SAME BUT WITH BIOLOGICAL PROCESS:
+
+```{r}
+######universe backgrounds#########
+###################################
+
+##le damos protein_ID
+universe_VAD2_info=universe_VAD2%>%
+  left_join(final_Anotacion_interested, by="gene_ID_gff3"
+  )
+
+
+# 1. Prepara TERM2GENE (lo haces una sola vez)
+TERM2GENE_bp <- GO_biolical_proces %>%
+  dplyr::select(goName, protein_ID_gff3) %>%
+  dplyr::distinct()
+
+
+#proteínas con anotación GO MF
+universe_VAD2_GO_BP <- universe_VAD2_info %>%
+  filter(!is.na(protein_ID_gff3)) %>%
+  semi_join(
+    tibble(protein_ID_gff3 = unique(GO_biolical_proces$protein_ID_gff3)),
+    by = "protein_ID_gff3"
+  )
+
+universe_VAD2_GO_BP_vector <- unique(universe_VAD2_GO_BP$protein_ID_gff3)
+
+length(universe_VAD2_GO_BP_vector)
+
+
+
+######MDV2.3
+universe_MDV2.3_info=universe_MDV2.3%>%
+  left_join(final_Anotacion_interested, by="gene_ID_gff3"
+  )
+
+#proteínas con anotación GO MF
+universe_MDV2.3_GO_BP <- universe_MDV2.3_info %>%
+  filter(!is.na(protein_ID_gff3)) %>%
+  semi_join(
+    tibble(protein_ID_gff3 = unique(GO_biolical_proces$protein_ID_gff3)),
+    by = "protein_ID_gff3"
+  )
+
+universe_MDV2.3_GO_BP_vector <- unique(universe_MDV2.3_GO_BP$protein_ID_gff3)
+
+length(universe_MDV2.3_GO_BP_vector)
+
+
+########MDV1
+universe_MDV1_info=universe_MDV1%>%
+  left_join(final_Anotacion_interested, by="gene_ID_gff3"
+  )
+
+#proteínas con anotación GO MF
+universe_MDV1_GO_BP <- universe_MDV1_info %>%
+  filter(!is.na(protein_ID_gff3)) %>%
+  semi_join(
+    tibble(protein_ID_gff3 = unique(GO_biolical_proces$protein_ID_gff3)),
+    by = "protein_ID_gff3"
+  )
+
+universe_MDV1_GO_BP_vector <- unique(universe_MDV1_GO_BP$protein_ID_gff3)
+
+length(universe_MDV1_GO_BP_vector)
+
+
+
+
+###############################
+#### BIOLOGICAL PROCESS (BP) ###
+###############################
+
+# Universos específicos por genotipo (BP)
+universe_by_genotype_BP <- list(
+  VAD2    = as.character(universe_VAD2_GO_BP_vector),
+  MDV2.3  = as.character(universe_MDV2.3_GO_BP_vector),
+  MDV1    = as.character(universe_MDV1_GO_BP_vector)
+)
+
+
+###############################
+#### Comprobación universos ####
+###############################
+
+for (name in names(annotated_list)) {
+  
+  genotype_name <- sub("_(24|72|144)$", "", name)
+  
+  universe_i <- universe_by_genotype_BP[[genotype_name]]
+  
+  cat(
+    name,
+    "| genotype:", genotype_name,
+    "| class:", class(universe_i),
+    "| universe length:", length(universe_i),
+    "\n"
+  )
+}
+
+
+#############################################
+#### Enrichment GO Biological Process ########
+#############################################
+
+enrichment_results_BP <- lapply(names(annotated_list), function(name) {
+  
+  genes_interest <- annotated_list[[name]]$protein_ID_gff3
+  
+  genotype_name <- sub("_(24|72|144)$", "", name)
+  
+  universe_i <- universe_by_genotype_BP[[genotype_name]]
+  
+  genes_interest <- genes_interest %>%
+    unique() %>%
+    intersect(TERM2GENE_bp$protein_ID_gff3) %>%
+    intersect(universe_i)
+  
+  ego <- enricher(
+    gene          = genes_interest,
+    universe      = universe_i,
+    TERM2GENE     = TERM2GENE_bp,
+    pAdjustMethod = "BH",
+    qvalueCutoff  = 0.05
+  )
+  
+  return(ego)
+  
+})
+
+names(enrichment_results_BP) <- names(annotated_list)
+
+
+##dotplots individuales:
+
+for (name in names(enrichment_results_BP)) {
+  
+  ego <- enrichment_results_BP[[name]]
+  
+  if (!is.null(ego) && nrow(as.data.frame(ego)) > 0) {
+    
+    print(
+      dotplot(ego, showCategory = 20) +
+        ggtitle(paste("GO Biological Process:", name))
+    )
+    
+  } else {
+    
+    message(paste("No enrichment for:", name))
+    
+  }
+}
+
+
+
+##a dataframe
+
+df_list_BP <- lapply(enrichment_results_BP, function(x) {
+  
+  if (!is.null(x) && nrow(as.data.frame(x)) > 0) {
+    
+    as.data.frame(x)
+    
+  } else {
+    
+    NULL
+    
+  }
+  
+})
+
+
+##Genotype Time
+
+for(n in names(df_list_BP)){
+  
+  if(!is.null(df_list_BP[[n]])){
+    
+    df_list_BP[[n]]$Genotype <- sub("_(24|72|144)$","",n)
+    df_list_BP[[n]]$Time <- paste0(
+      sub(".*_(24|72|144)$","\\1",n),
+      "h"
+    )
+    
+  }
+  
+}
+
+
+##Combine:
+
+combined_enrichment_BP <- bind_rows(df_list_BP)
+
+##FoldEnrichment:
+
+parse_ratio <- function(ratio_str){
+  
+  sapply(
+    strsplit(as.character(ratio_str), "/"),
+    function(x) as.numeric(x[1]) / as.numeric(x[2])
+  )
+  
+}
+
+combined_enrichment_BP$CountRatio <-
+  parse_ratio(combined_enrichment_BP$GeneRatio)
+
+combined_enrichment_BP$BgRatio <-
+  parse_ratio(combined_enrichment_BP$BgRatio)
+
+combined_enrichment_BP$FoldEnrichment <-
+  combined_enrichment_BP$CountRatio /
+  combined_enrichment_BP$BgRatio
+
+
+##VAriables para el gráfico
+
+combined_enrichment_BP <- combined_enrichment_BP %>%
+  
+  mutate(
+    
+    Time = factor(
+      Time,
+      levels = c("24h","72h","144h")
+    ),
+    
+    Genotype = factor(
+      Genotype,
+      levels = c("VAD2","MDV2.3","MDV1"),
+      ordered = TRUE
+    ),
+    
+    GO_wrapped = str_wrap(Description),
+    
+    log10_padj = -log10(p.adjust)
+    
+  ) %>%
+  
+  filter(!is.na(Description))
+
+
+##elimino transport y metabolic transport: too general.
+
+BP_terms_to_remove=c("transport", "metabolic process")
+combined_enrichment_BP=combined_enrichment_BP %>%
+  filter(!Description %in% BP_terms_to_remove)
+
+##Dotplot Combine:
+
+dotplot_combined_BP <- ggplot(
+  combined_enrichment_BP,
+  aes(x = Genotype, y = GO_wrapped)
+) +
+  
   geom_point(
-    aes(size = FoldEnrichment, fill = log10_padj),
+    aes(
+      size = FoldEnrichment,
+      fill = log10_padj
+    ),
     shape = 21,
-    color = "black",
+    colour = "black",
     stroke = 0.5
   ) +
-  facet_wrap(~ Time, ncol = 3) +  # <-- Ahora facet por Time
-  scale_fill_gradient(low = "orange", high = "red", name = "-log10(adj. p-value)") +
-  scale_size(range = c(1, 30)) +
+  
+  facet_wrap(~Time, ncol = 3) +
+  
+  scale_fill_gradient(
+    low = "orange",
+    high = "red",
+    name = "-log10(adj. p-value)"
+  ) +
+  
+  scale_size(
+    range = c(5,15),
+    name = "Fold enrichment"
+  ) +
+  
   theme_minimal(base_size = 14) +
+  
   theme(
+    
     axis.text.y = element_text(size = 16),
-    axis.text.x = element_text(angle = 45, hjust = 1, size = 18, face="bold"),
-    # plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
-    # strip.text = element_text(size = 18, face = "bold")  facet (24vs6, 72vs6, 144vs6)
+    
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1,
+      size = 16
+    ),
+    
+    # strip.text = element_text(
+    #   size = 18,
+    #   face = "bold"
+    # ),
+    # 
+    strip.text = element_blank(),  # <- elimina 24,72,144    
+    legend.title = element_text(size = 18),
+    legend.text  = element_text(size = 16),
+    legend.key.size = unit(1.2,"cm")
+    
   ) +
+  
   labs(
-    # title = "GO Molecular Function Enrichment Comparison by Time",
+    title = "",
     x = "",
-    y = "",
-    size = "FoldEnrichment"
-  ) +
-  theme(
-    legend.title = element_text(size = 12),
-    legend.text = element_text(size = 12),
-    legend.key.size = unit(0.7, "cm"),
-    strip.text.x = element_blank(),        # ningún texto
-    strip.background = element_blank()     # sin fondo/gris
+    y = ""
   )
 
+print(dotplot_combined_BP)
+```
 
-dotplot_combined_bp
+FIGURE 4B+C
 
-# Figure 4BC
-figure_combined_AB <- (dotplot_combined / dotplot_combined_bp) +
-  plot_layout(guides = "collect") +         # << une las leyendas
-  plot_annotation(tag_levels = "A")         # << añade etiquetas A/B
+```{r}
 
-print(figure_combined_AB)
+# Etiquetas de genotipo
+genotype_labels <- c(
+  "VAD2"   = "R-VAD2",
+  "MDV2.3" = "R-MDV2.3",
+  "MDV1"   = "S-MDV1"
+)
+
+# combined_enrichment_modules_summary
+# dotplot_combined_MF_modules
+# combined_enrichment_BP
+# dotplot_combined_BP
+
+levels(combined_enrichment_modules_summary$Genotype)
+levels(combined_enrichment_BP$Genotype)
+
+combined_enrichment=combined_enrichment_modules_summary
+combined_enrichment_bp=combined_enrichment_BP
+
+##para que salga el texto en una linea
+combined_enrichment_BP$GO_wrapped <-
+  combined_enrichment_BP$Functional_module
 
 
-##Fine-tune
+#################3
+##AJUSTE FINO:
 
+###############################################################################
+# 1. RANGOS GLOBALES  ---------------------------------------------------------
+###############################################################################
 size_vec <- c(combined_enrichment$FoldEnrichment,
               combined_enrichment_bp$FoldEnrichment)
 fill_vec <- c(combined_enrichment$log10_padj,
@@ -1914,10 +2307,13 @@ fill_vec <- c(combined_enrichment$log10_padj,
 size_lim   <- range(size_vec, na.rm = TRUE)
 fill_lim   <- range(fill_vec, na.rm = TRUE)
 
-# breaks 
+# breaks “bonitos”
 size_breaks <- pretty(size_lim, 4)
 fill_breaks <- pretty(fill_lim, 5)
 
+###############################################################################
+# 1. Escalas comunes – ahora con leyenda vertical y rango de tamaños mayor
+###############################################################################
 size_lim    <- range(c(combined_enrichment$FoldEnrichment,
                        combined_enrichment_bp$FoldEnrichment), na.rm = TRUE)
 size_breaks <- pretty(size_lim, 4)
@@ -1925,7 +2321,7 @@ size_breaks <- pretty(size_lim, 4)
 fill_lim    <- range(c(combined_enrichment$log10_padj,
                        combined_enrichment_bp$log10_padj), na.rm = TRUE)
 fill_breaks <- pretty(fill_lim, 5)
-# Common scale
+# Escalas comunes
 size_scale <- scale_size_continuous(
   limits = range(c(combined_enrichment$FoldEnrichment,
                    combined_enrichment_bp$FoldEnrichment), na.rm = TRUE),
@@ -1940,8 +2336,8 @@ fill_scale <- scale_fill_gradient(
   name = expression(-log[10]~adj.~italic(p))
 )
 
-# Panel MF 
-dotplot_MF <- dotplot_combined +
+# Panel MF (sin leyenda)
+dotplot_MF <- dotplot_combined_MF_modules +
   size_scale + fill_scale +
   theme(
     legend.position = "none",
@@ -1950,11 +2346,12 @@ dotplot_MF <- dotplot_combined +
     plot.margin = margin(10, 10, 0, 10)
   )
 
-# Panel BP 
-dotplot_BP <- dotplot_combined_bp +
+# Panel BP (con leyenda vertical)
+dotplot_BP <- dotplot_combined_BP +
+   scale_x_discrete(labels = genotype_labels) +
   size_scale + fill_scale +
   theme(
-    legend.position = "right",  
+    legend.position = "right",  # ← IMPORTANTE
     legend.direction = "vertical",
     legend.box = "vertical",
     legend.title = element_text(size = 18),
@@ -1963,18 +2360,21 @@ dotplot_BP <- dotplot_combined_bp +
     plot.margin = margin(0, 10, 10, 10)
   )
 
-# 3. Combined: MF 60 %, BP 40 %
 
-figure_AB <- (dotplot_MF / dotplot_BP) +
-  plot_layout(heights = c(4, 2), guides = "collect") +
+###############################################################################
+# 3. Combinar: MF 60 %, BP 40 %
+###############################################################################
+figure_MF_BP <- (dotplot_MF / dotplot_BP) +
+  plot_layout(heights = c(4, 3), guides = "collect") +
   plot_annotation(tag_levels = "A") &
   theme(plot.tag = element_text(face = "bold", size = 20))
 
-print(figure_AB)
+print(figure_MF_BP)
 ```
 
-~Genotype model based on DEGs
-Time 24
+FIGURE5: ~GENOTYPE MODEL (targeted to DEGs-only {up+down})
+
+Time 24 (~Genotype)
 
 ```{r}
 ##DEGs up and down.
@@ -1982,83 +2382,91 @@ ids_unicos_24_all=unique(c(Time_sig_up_VAD2_24_annotated$gene_ID_gff3,Time_sig_u
 
 ##counts:
 counts_local_filtered_24 <- counts_local[rownames(counts_local) %in% ids_unicos_24_all, ]
-##filtering
+##filtrar columnas_24
 counts_local_filtered_24_cols_24 <- grep("24$", colnames(counts_local_filtered_24), value = TRUE)
 
-##
 counts_local_filtered_24 <- counts_local_filtered_24[, counts_local_filtered_24_cols_24]
 
-
 ##metadata:
-# Filter the metadata to keep the same samples
+# 2. Filtrar metadata para las mismas muestras
 metadata_24 <- metadata_local[metadata_local$Complete_name %in% counts_local_filtered_24_cols_24, ]
 
-# Order
+# 3. Asegurar que el orden coincide
 metadata_24 <- metadata_24[match(colnames(counts_local_filtered_24), metadata_24$Complete_name), ]
 
-# DESeq2
+
+
+# 4. Crear el objeto DESeq2
 dds_24 <- DESeqDataSetFromMatrix(
   countData = counts_local_filtered_24,
   colData   = metadata_24,
   design    = ~ Genotype
 )
 
-dds_24 <- DESeq(dds_24)
+
 vsd_24 <- varianceStabilizingTransformation(dds_24, blind = TRUE)
 
-##PCA
+##hay que hacer la PCA a mano para acceder a los loadings
 mat_24 <- assay(vsd_24)
 pca_24=prcomp(t(mat_24))  ##mat_24 tiene forma genes × muestras. Pero la PCA quiere observar cómo se agrupan las muestras, no los genes.
 
-# % var
+plot(pca_24$x)
+
+# % de varianza explicada
 percentVar_24 <- (pca_24$sdev^2) / sum(pca_24$sdev^2) * 100
 round(percentVar_24[1], 1)
 round(percentVar_24[2], 1)
 
-##loadings
+##peso de las muestras (genes)
 loadings_24=as.data.frame(pca_24$rotation)
 loadings_24$Gene <- rownames(loadings_24)
 
-##variables (sample replicates)
+##variables (réplicas de las muestras)
 scores_24 <- as.data.frame(pca_24$x)
-##column Genotype
+##añado columna Genotype
 scores_24$Genotype <- colData(dds_24)$Genotype
 
-## top genes loadings:
+##sacar los top genes loadings:
 top_PC1_24=head(order(abs(loadings_24[,1]), decreasing = TRUE),15)
 top_PC2_24=head(order(abs(loadings_24[,2]), decreasing=TRUE),15)
 
-##position
+##sacar los genes que coincidan con esas posiciones:
 genes_PC1_24 <- rownames(loadings_24)[top_PC1_24]
 genes_PC2_24 <- rownames(loadings_24)[top_PC2_24]
 
-# top of PC1 y PC2
+# selecciona solo los genes top de PC1 y PC2
 top_genes_24 <- unique(c(genes_PC1_24, genes_PC2_24))
 
-# # Scale
-scale_factor_24 <- 10  
+# # Escalado de los vectores de los genes top
+scale_factor_24 <- 30  # ajusta este valor hasta que las flechas se vean proporcionadas
 loadings_scaled_24 <- loadings_24
 loadings_scaled_24$PC1 <- loadings_24$PC1 * scale_factor_24
 loadings_scaled_24$PC2 <- loadings_24$PC2 * scale_factor_24
 
+
 loadings_scaled_top_24 <- loadings_scaled_24[loadings_scaled_24$Gene %in% top_genes_24, ]
 
-##rename
+##que salga g11111 en vez del gff3
 loadings_scaled_top_24$gene_ID_gff3=loadings_scaled_top_24$Gene
 loadings_scaled_top_24_annotated=loadings_scaled_top_24%>%
   left_join(final_Anotacion_interested, by="gene_ID_gff3")
 
-# biplot:
+
+
+# biplot: muestras + vectores de genes
 loadings_PCA_24=ggplot(scores_24, aes(x = PC1, y = PC2, color = Genotype)) +
   geom_point(size = 3) +
+  # geom_text_repel(data=scores_24,
+  #                 aes(x=PC1,y=PC2, label=rownames(scores_24),
+  #                     color="pink", size=4))+
   geom_segment(data = loadings_scaled_top_24_annotated,
                aes(x = 0, y = 0, xend = PC1, yend = PC2),
                arrow = arrow(length = unit(0.2,"cm")), color = "ivory3") +
    geom_text_repel(data = loadings_scaled_top_24_annotated,
                   aes(x = PC1, y = PC2, label = gene_ID),
                   color = "ivory4", size = 3.5,
-                  max.overlaps = Inf,
-                  box.padding = 0.3,  
+                  max.overlaps = Inf, # permite más solapamientos controlados
+                  box.padding = 0.3,  # separación alrededor de cada etiqueta
                   point.padding = 0.2) +
   theme_classic() +
 labs(
@@ -2066,30 +2474,36 @@ labs(
     y = paste0("PC2: ", round(percentVar_24[2], 1), "% variance"),
     title = "PCA biplot with top 25 contributing genes in 24 hpi"
   )
+
 loadings_PCA_24
+
 ```
 
-~Genotype model based on DEGs
-Time 72
+Time 72 (~Genotype)
 
 ```{r}
 ##DEGs up and down.
 ids_unicos_72_ALL=unique(c(Time_sig_up_VAD2_72_annotated$gene_ID_gff3,Time_sig_up_MDV2.3_72_annotated$gene_ID_gff3,Time_sig_up_MDV1_72_annotated$gene_ID_gff3, Time_sig_down_VAD2_72_annotated$gene_ID_gff3, Time_sig_down_MDV2.3_72_annotated$gene_ID_gff3, Time_sig_down_MDV1_72_annotated$gene_ID_gff3))
-s
 
 ##counts:
 counts_local_filtered_72 <- counts_local[rownames(counts_local) %in% ids_unicos_72_ALL, ]
-
-##filter
+##filtrar columnas_72
 counts_local_filtered_72_cols_72 <- grep("72$", colnames(counts_local_filtered_72), value = TRUE)
+##matriz de los DEGs en 72 solo en las 12 muestras de 72hpi.
+
+# counts_local_filtered_72=counts_local_filtered_72[colnames(counts_local_filtered_72)%in%counts_local_filtered_72_cols_72]
+##más correcto y directo:
 counts_local_filtered_72 <- counts_local_filtered_72[, counts_local_filtered_72_cols_72]
 
 
 ##metadata:
+# 2. Filtrar metadata para las mismas muestras
 metadata_72 <- metadata_local[metadata_local$Complete_name %in% counts_local_filtered_72_cols_72, ]
+
+# 3. Asegurar que el orden coincide
 metadata_72 <- metadata_72[match(colnames(counts_local_filtered_72), metadata_72$Complete_name), ]
 
-#DESeq2
+# 4. Crear el objeto DESeq2
 dds_72 <- DESeqDataSetFromMatrix(
   countData = counts_local_filtered_72,
   colData   = metadata_72,
@@ -2098,58 +2512,64 @@ dds_72 <- DESeqDataSetFromMatrix(
 
 dds_72 <- DESeq(dds_72)
 vsd_72 <- varianceStabilizingTransformation(dds_72, blind = TRUE)
-mat_72 <- assay(vsd_72)
-pca_72=prcomp(t(mat_72))  
 
-# % var
+
+mat_72 <- assay(vsd_72)
+pca_72=prcomp(t(mat_72))  ##mat_72 tiene forma genes × muestras. Pero la PCA quiere observar cómo se agrupan las muestras, no los genes.
+
+# % de varianza explicada
 percentVar_72 <- (pca_72$sdev^2) / sum(pca_72$sdev^2) * 100
 round(percentVar_72[1], 1)
 round(percentVar_72[2], 1)
 
-##loadings
+##peso de las muestras (genes)
 loadings_72=as.data.frame(pca_72$rotation)
 loadings_72$Gene <- rownames(loadings_72)
 
-##scores
+##variables (réplicas de las muestras)
 scores_72 <- as.data.frame(pca_72$x)
 ##añado columna Genotype
 scores_72$Genotype <- colData(dds_72)$Genotype
 
-##top genes loadings:
+##sacar los top genes loadings:
 top_PC1_72=head(order(abs(loadings_72[,1]), decreasing = TRUE),15)
 top_PC2_72=head(order(abs(loadings_72[,2]), decreasing=TRUE),15)
 
-##positions:
+##sacar los genes que coincidan con esas posiciones:
 genes_PC1_72 <- rownames(loadings_72)[top_PC1_72]
 genes_PC2_72 <- rownames(loadings_72)[top_PC2_72]
 
-# genes top PC1 y PC2
+# selecciona solo los genes top de PC1 y PC2
 top_genes_72 <- unique(c(genes_PC1_72, genes_PC2_72))
 
-# # Scale
-scale_factor_72 <- 30 
+# # Escalado de los vectores de los genes top
+scale_factor_72 <- 30  # ajusta este valor hasta que las flechas se vean proporcionadas
 loadings_scaled_72 <- loadings_72
 loadings_scaled_72$PC1 <- loadings_72$PC1 * scale_factor_72
 loadings_scaled_72$PC2 <- loadings_72$PC2 * scale_factor_72
 
 loadings_scaled_top_72 <- loadings_scaled_72[loadings_scaled_72$Gene %in% top_genes_72, ]
 
-##rename
+##que salga g11111 en vez del gff3
 loadings_scaled_top_72$gene_ID_gff3=loadings_scaled_top_72$Gene
 loadings_scaled_top_72_annotated=loadings_scaled_top_72%>%
   left_join(final_Anotacion_interested, by="gene_ID_gff3")
 
-# biplot
+
+# biplot: muestras + vectores de genes
 loadings_PCA_72=ggplot(scores_72, aes(x = PC1, y = PC2, color = Genotype)) +
   geom_point(size = 3) +
+  # geom_text_repel(data=scores_72,
+  #                 aes(x=PC1,y=PC2, label=rownames(scores_72),
+  #                     color="pink", size=4))+
   geom_segment(data = loadings_scaled_top_72_annotated,
                aes(x = 0, y = 0, xend = PC1, yend = PC2),
                arrow = arrow(length = unit(0.2,"cm")), color = "ivory3") +
    geom_text_repel(data = loadings_scaled_top_72_annotated,
                   aes(x = PC1, y = PC2, label = gene_ID),
                   color = "ivory4", size = 3.5,
-                  max.overlaps = Inf,
-                  box.padding = 0.3,  
+                  max.overlaps = Inf, # permite más solapamientos controlados
+                  box.padding = 0.3,  # separación alrededor de cada etiqueta
                   point.padding = 0.2) +
   theme_classic() +
 labs(
@@ -2160,29 +2580,34 @@ labs(
 
 loadings_PCA_72
 
+
 ```
 
-~Genotype model based on DEGs
-Time 144
+Time 144 (~Genotype)
 
 ```{r}
+
 ##DEGs up and down.
 ids_unicos_144_ALL=unique(c(Time_sig_up_VAD2_144_annotated$gene_ID_gff3,Time_sig_up_MDV2.3_144_annotated$gene_ID_gff3,Time_sig_up_MDV1_144_annotated$gene_ID_gff3, Time_sig_down_VAD2_144_annotated$gene_ID_gff3, Time_sig_down_MDV2.3_144_annotated$gene_ID_gff3, Time_sig_down_MDV1_144_annotated$gene_ID_gff3))
 
-## counts:
+##counts:
 counts_local_filtered_144 <- counts_local[rownames(counts_local) %in% ids_unicos_144_ALL, ]
-
-## filter
+##filtrar columnas_144
 counts_local_filtered_144_cols_144 <- grep("144$", colnames(counts_local_filtered_144), value = TRUE)
+##matriz de los DEGs en 144 solo en las 12 muestras de 144hpi.
+
+# counts_local_filtered_144=counts_local_filtered_144[colnames(counts_local_filtered_144)%in%counts_local_filtered_144_cols_144]
+##más correcto y directo:
 counts_local_filtered_144 <- counts_local_filtered_144[, counts_local_filtered_144_cols_144]
 
-## metadata:
+##metadata:
+# 2. Filtrar metadata para las mismas muestras
 metadata_144 <- metadata_local[metadata_local$Complete_name %in% counts_local_filtered_144_cols_144, ]
 
-# Check
+# 3. Asegurar que el orden coincide
 metadata_144 <- metadata_144[match(colnames(counts_local_filtered_144), metadata_144$Complete_name), ]
 
-# DESeq2
+# 4. Crear el objeto DESeq2
 dds_144 <- DESeqDataSetFromMatrix(
   countData = counts_local_filtered_144,
   colData   = metadata_144,
@@ -2193,50 +2618,53 @@ dds_144 <- DESeq(dds_144)
 vsd_144 <- varianceStabilizingTransformation(dds_144, blind = TRUE)
 
 mat_144 <- assay(vsd_144)
-pca_144=prcomp(t(mat_144))  
+pca_144=prcomp(t(mat_144))  ##mat_144 tiene forma genes × muestras. Pero la PCA quiere observar cómo se agrupan las muestras, no los genes.
 
-# var
+# % de varianza explicada
 percentVar_144 <- (pca_144$sdev^2) / sum(pca_144$sdev^2) * 100
 round(percentVar_144[1], 1)
 round(percentVar_144[2], 1)
 
-## loadings
+##peso de las muestras (genes)
 loadings_144=as.data.frame(pca_144$rotation)
 loadings_144$Gene <- rownames(loadings_144)
 
-## scores
+##variables (réplicas de las muestras)
 scores_144 <- as.data.frame(pca_144$x)
 ##añado columna Genotype
 scores_144$Genotype <- colData(dds_144)$Genotype
 
-## top genes loadings:
+##sacar los top genes loadings:
 top_PC1_144=head(order(abs(loadings_144[,1]), decreasing = TRUE),15)
 top_PC2_144=head(order(abs(loadings_144[,2]), decreasing=TRUE),15)
 
-## positions:
+##sacar los genes que coincidan con esas posiciones:
 genes_PC1_144 <- rownames(loadings_144)[top_PC1_144]
 genes_PC2_144 <- rownames(loadings_144)[top_PC2_144]
 
-# genes top PC1 y PC2
+# selecciona solo los genes top de PC1 y PC2
 top_genes_144 <- unique(c(genes_PC1_144, genes_PC2_144))
 
-## Scale
-scale_factor_144 <- 40  # ajusta este valor hasta que las flechas se vean proporcionadas
+# # Escalado de los vectores de los genes top
+scale_factor_144 <- 30  # ajusta este valor hasta que las flechas se vean proporcionadas
 loadings_scaled_144 <- loadings_144
 loadings_scaled_144$PC1 <- loadings_144$PC1 * scale_factor_144
 loadings_scaled_144$PC2 <- loadings_144$PC2 * scale_factor_144
 
 loadings_scaled_top_144 <- loadings_scaled_144[loadings_scaled_144$Gene %in% top_genes_144, ]
 
-## rename
+##que salga g11111 en vez del gff3
 loadings_scaled_top_144$gene_ID_gff3=loadings_scaled_top_144$Gene
 loadings_scaled_top_144_annotated=loadings_scaled_top_144%>%
   left_join(final_Anotacion_interested, by="gene_ID_gff3")
 
 
-# biplot
+# biplot: muestras + vectores de genes
 loadings_PCA_144=ggplot(scores_144, aes(x = PC1, y = PC2, color = Genotype)) +
   geom_point(size = 3) +
+  # geom_text_repel(data=scores_144,
+  #                 aes(x=PC1,y=PC2, label=rownames(scores_144),
+  #                     color="pink", size=4))+
   geom_segment(data = loadings_scaled_top_144_annotated,
                aes(x = 0, y = 0, xend = PC1, yend = PC2),
                arrow = arrow(length = unit(0.2,"cm")), color = "ivory3") +
@@ -2257,27 +2685,298 @@ loadings_PCA_144
 
 ```
 
-##DISTAL
+DEGs ~Genotype  get each df and save it.
 
-Figure 5.
+```{r}
+
+dds_24 <- DESeq(dds_24)
+resultsNames(dds_24)
+
+res_24_VAD2_vs_MDV23_genotype <- results(
+  dds_24,
+  contrast = c("Genotype", "VAD2", "MDV2.3")
+)
+
+summary(res_24_VAD2_vs_MDV23_genotype)
+
+res_24_VAD2_vs_MDV1_genotype <- results(
+  dds_24,
+  contrast = c("Genotype", "VAD2", "MDV1")
+)
+
+summary(res_24_VAD2_vs_MDV1_genotype)
+
+res_24_MDV23_vs_MDV1_genotype <- results(
+  dds_24,
+  contrast = c("Genotype", "MDV2.3", "MDV1")
+)
+
+summary(res_24_MDV23_vs_MDV1_genotype)  ##aquí hay uno pero o.1 signiciancia
+sig_res_24_MDV23_vs_MDV1_genotype <- as.data.frame(res_24_MDV23_vs_MDV1_genotype) %>%
+  filter(!is.na(padj), padj < 0.05)
+
+###########72
+
+dds_72 <- DESeq(dds_72)
+resultsNames(dds_72)
+
+res_72_VAD2_vs_MDV23_genotype <- results(
+  dds_72,
+  contrast = c("Genotype", "VAD2", "MDV2.3")
+)
+
+summary(res_72_VAD2_vs_MDV23_genotype)
+
+sig_res_72_VAD2_vs_MDV23_genotype <- as.data.frame(res_72_VAD2_vs_MDV23_genotype) %>%
+  filter(!is.na(padj), padj < 0.05)
+
+
+res_72_VAD2_vs_MDV1_genotype <- results(
+  dds_72,
+  contrast = c("Genotype", "VAD2", "MDV1")
+)
+
+summary(res_72_VAD2_vs_MDV1_genotype)
+sig_res_72_VAD2_vs_MDV1_genotype <- as.data.frame(res_72_VAD2_vs_MDV1_genotype) %>%
+  filter(!is.na(padj), padj < 0.05)
+
+res_72_MDV23_vs_MDV1_genotype <- results(
+  dds_72,
+  contrast = c("Genotype", "MDV2.3", "MDV1")
+)
+
+summary(res_72_MDV23_vs_MDV1_genotype)  ##aquí hay uno
+sig_res_72_MDV23_vs_MDV1_genotype <- as.data.frame(res_72_MDV23_vs_MDV1_genotype) %>%
+  filter(!is.na(padj), padj < 0.05)
+
+
+#########144
+dds_144 <- DESeq(dds_144)
+resultsNames(dds_144)
+
+res_144_VAD2_vs_MDV23_genotype <- results(
+  dds_144,
+  contrast = c("Genotype", "VAD2", "MDV2.3")
+)
+
+summary(res_144_VAD2_vs_MDV23_genotype)
+
+sig_res_144_VAD2_vs_MDV23_genotype <- as.data.frame(res_144_VAD2_vs_MDV23_genotype) %>%
+  filter(!is.na(padj), padj < 0.05)
+
+
+res_144_VAD2_vs_MDV1_genotype <- results(
+  dds_144,
+  contrast = c("Genotype", "VAD2", "MDV1")
+)
+
+summary(res_144_VAD2_vs_MDV1_genotype)
+sig_res_144_VAD2_vs_MDV1_genotype <- as.data.frame(res_144_VAD2_vs_MDV1_genotype) %>%
+  filter(!is.na(padj), padj < 0.05)
+
+res_144_MDV23_vs_MDV1_genotype <- results(
+  dds_144,
+  contrast = c("Genotype", "MDV2.3", "MDV1")
+)
+
+summary(res_144_MDV23_vs_MDV1_genotype)  ##aquí hay uno
+sig_res_144_MDV23_vs_MDV1_genotype <- as.data.frame(res_144_MDV23_vs_MDV1_genotype) %>%
+  filter(!is.na(padj), padj < 0.05)
+
+
+
+##24 solo
+sig_res_24_MDV23_vs_MDV1_genotype
+##72
+sig_res_72_VAD2_vs_MDV23_genotype
+sig_res_72_VAD2_vs_MDV1_genotype
+sig_res_72_MDV23_vs_MDV1_genotype
+##144
+sig_res_144_VAD2_vs_MDV23_genotype
+sig_res_144_VAD2_vs_MDV1_genotype
+sig_res_144_MDV23_vs_MDV1_genotype
+
+
+##dejarlo fino para una tabla:
+######24########
+sig_res_24_MDV23_vs_MDV1_genotype_UP=sig_res_24_MDV23_vs_MDV1_genotype%>%
+filter(padj < 0.05, log2FoldChange > 1) %>%
+    mutate(gene_ID_gff3 = rownames(.))
+
+sig_res_24_MDV23_vs_MDV1_genotype_UP_info=sig_res_24_MDV23_vs_MDV1_genotype_UP%>%
+  left_join(final_Anotacion_interested, by="gene_ID_gff3")
+
+
+######72######## 
+
+sig_res_72_VAD2_vs_MDV23_genotype_UP <- sig_res_72_VAD2_vs_MDV23_genotype %>%
+  filter(padj < 0.05, log2FoldChange > 1) %>%
+  mutate(gene_ID_gff3 = rownames(.))
+
+sig_res_72_VAD2_vs_MDV23_genotype_UP_info <- sig_res_72_VAD2_vs_MDV23_genotype_UP %>%
+  left_join(final_Anotacion_interested, by = "gene_ID_gff3")
+
+
+sig_res_72_VAD2_vs_MDV1_genotype_UP <- sig_res_72_VAD2_vs_MDV1_genotype %>%
+  filter(padj < 0.05, log2FoldChange > 1) %>%
+  mutate(gene_ID_gff3 = rownames(.))
+
+sig_res_72_VAD2_vs_MDV1_genotype_UP_info <- sig_res_72_VAD2_vs_MDV1_genotype_UP %>%
+  left_join(final_Anotacion_interested, by = "gene_ID_gff3")
+
+
+sig_res_72_MDV23_vs_MDV1_genotype_UP <- sig_res_72_MDV23_vs_MDV1_genotype %>%
+  filter(padj < 0.05, log2FoldChange > 1) %>%
+  mutate(gene_ID_gff3 = rownames(.))
+
+sig_res_72_MDV23_vs_MDV1_genotype_UP_info <- sig_res_72_MDV23_vs_MDV1_genotype_UP %>%
+  left_join(final_Anotacion_interested, by = "gene_ID_gff3")
+
+##########72DOWN######
+
+sig_res_72_VAD2_vs_MDV23_genotype_DOWN <- sig_res_72_VAD2_vs_MDV23_genotype %>%
+  filter(padj < 0.05, log2FoldChange < -1) %>%
+  mutate(gene_ID_gff3 = rownames(.))
+
+sig_res_72_VAD2_vs_MDV23_genotype_DOWN_info <- sig_res_72_VAD2_vs_MDV23_genotype_DOWN %>%
+  left_join(final_Anotacion_interested, by = "gene_ID_gff3")
+
+
+sig_res_72_VAD2_vs_MDV1_genotype_DOWN <- sig_res_72_VAD2_vs_MDV1_genotype %>%
+  filter(padj < 0.05, log2FoldChange < -1) %>%
+  mutate(gene_ID_gff3 = rownames(.))
+
+sig_res_72_VAD2_vs_MDV1_genotype_DOWN_info <- sig_res_72_VAD2_vs_MDV1_genotype_DOWN %>%
+  left_join(final_Anotacion_interested, by = "gene_ID_gff3")
+
+
+sig_res_72_MDV23_vs_MDV1_genotype_DOWN <- sig_res_72_MDV23_vs_MDV1_genotype %>%
+  filter(padj < 0.05, log2FoldChange < -1) %>%
+  mutate(gene_ID_gff3 = rownames(.))
+
+sig_res_72_MDV23_vs_MDV1_genotype_DOWN_info <- sig_res_72_MDV23_vs_MDV1_genotype_DOWN %>%
+  left_join(final_Anotacion_interested, by = "gene_ID_gff3")
+
+
+######144 UP########
+
+sig_res_144_VAD2_vs_MDV23_genotype_UP <- sig_res_144_VAD2_vs_MDV23_genotype %>%
+  filter(padj < 0.05, log2FoldChange > 1) %>%
+  mutate(gene_ID_gff3 = rownames(.))
+
+sig_res_144_VAD2_vs_MDV23_genotype_UP_info <- sig_res_144_VAD2_vs_MDV23_genotype_UP %>%
+  left_join(final_Anotacion_interested, by = "gene_ID_gff3")
+
+
+sig_res_144_VAD2_vs_MDV1_genotype_UP <- sig_res_144_VAD2_vs_MDV1_genotype %>%
+  filter(padj < 0.05, log2FoldChange > 1) %>%
+  mutate(gene_ID_gff3 = rownames(.))
+
+sig_res_144_VAD2_vs_MDV1_genotype_UP_info <- sig_res_144_VAD2_vs_MDV1_genotype_UP %>%
+  left_join(final_Anotacion_interested, by = "gene_ID_gff3")
+
+
+sig_res_144_MDV23_vs_MDV1_genotype_UP <- sig_res_144_MDV23_vs_MDV1_genotype %>%
+  filter(padj < 0.05, log2FoldChange > 1) %>%
+  mutate(gene_ID_gff3 = rownames(.))
+
+sig_res_144_MDV23_vs_MDV1_genotype_UP_info <- sig_res_144_MDV23_vs_MDV1_genotype_UP %>%
+  left_join(final_Anotacion_interested, by = "gene_ID_gff3")
+
+
+#######144 DOWN##############
+
+sig_res_144_VAD2_vs_MDV23_genotype_DOWN <- sig_res_144_VAD2_vs_MDV23_genotype %>%
+  filter(padj < 0.05, log2FoldChange < -1) %>%
+  mutate(gene_ID_gff3 = rownames(.))
+
+sig_res_144_VAD2_vs_MDV23_genotype_DOWN_info <- sig_res_144_VAD2_vs_MDV23_genotype_DOWN %>%
+  left_join(final_Anotacion_interested, by = "gene_ID_gff3")
+
+
+sig_res_144_VAD2_vs_MDV1_genotype_DOWN <- sig_res_144_VAD2_vs_MDV1_genotype %>%
+  filter(padj < 0.05, log2FoldChange < -1) %>%
+  mutate(gene_ID_gff3 = rownames(.))
+
+sig_res_144_VAD2_vs_MDV1_genotype_DOWN_info <- sig_res_144_VAD2_vs_MDV1_genotype_DOWN %>%
+  left_join(final_Anotacion_interested, by = "gene_ID_gff3")
+
+
+sig_res_144_MDV23_vs_MDV1_genotype_DOWN <- sig_res_144_MDV23_vs_MDV1_genotype %>%
+  filter(padj < 0.05, log2FoldChange < -1) %>%
+  mutate(gene_ID_gff3 = rownames(.))
+
+sig_res_144_MDV23_vs_MDV1_genotype_DOWN_info <- sig_res_144_MDV23_vs_MDV1_genotype_DOWN %>%
+  left_join(final_Anotacion_interested, by = "gene_ID_gff3")
+
+
+##########SAVE ALL####################
+dfs_to_save <- list(
+  sig_res_24_MDV23_vs_MDV1_genotype_UP_info,
+  sig_res_72_VAD2_vs_MDV23_genotype_UP_info,
+  sig_res_72_VAD2_vs_MDV1_genotype_UP_info,
+  sig_res_72_MDV23_vs_MDV1_genotype_UP_info,
+  sig_res_144_VAD2_vs_MDV23_genotype_UP_info,
+  sig_res_144_VAD2_vs_MDV1_genotype_UP_info,
+  sig_res_144_MDV23_vs_MDV1_genotype_UP_info,
+  sig_res_72_VAD2_vs_MDV23_genotype_DOWN_info,
+  sig_res_72_VAD2_vs_MDV1_genotype_DOWN_info,
+  sig_res_72_MDV23_vs_MDV1_genotype_DOWN_info,
+  sig_res_144_VAD2_vs_MDV23_genotype_DOWN_info,
+  sig_res_144_VAD2_vs_MDV1_genotype_DOWN_info,
+  sig_res_144_MDV23_vs_MDV1_genotype_DOWN_info
+)
+
+names(dfs_to_save) <- c(
+  "sig_res_24_MDV23_vs_MDV1_genotype_UP_info",
+  "sig_res_72_VAD2_vs_MDV23_genotype_UP_info",
+  "sig_res_72_VAD2_vs_MDV1_genotype_UP_info",
+  "sig_res_72_MDV23_vs_MDV1_genotype_UP_info",
+  "sig_res_144_VAD2_vs_MDV23_genotype_UP_info",
+  "sig_res_144_VAD2_vs_MDV1_genotype_UP_info",
+  "sig_res_144_MDV23_vs_MDV1_genotype_UP_info",
+  "sig_res_72_VAD2_vs_MDV23_genotype_DOWN_info",
+  "sig_res_72_VAD2_vs_MDV1_genotype_DOWN_info",
+  "sig_res_72_MDV23_vs_MDV1_genotype_DOWN_info",
+  "sig_res_144_VAD2_vs_MDV23_genotype_DOWN_info",
+  "sig_res_144_VAD2_vs_MDV1_genotype_DOWN_info",
+  "sig_res_144_MDV23_vs_MDV1_genotype_DOWN_info"
+)
+
+
+# dir.create("DEGs_csv", showWarnings = FALSE)
+# 
+# for(i in names(dfs_to_save)) {
+#   write.csv(
+#     dfs_to_save[[i]],
+#     file.path("DEGs_csv", paste0(i, ".csv")),
+#     row.names = FALSE
+#   )
+# }
+
+```
+
+
+
+
+
+########DISTAL##########
+      FIGURE 6:
 
 Metdatada and why no DESeq2
 
 ```{r}
-##Distal
-metadata_distal <- metadata %>% filter(Distance == "Distal")
+## Seleccionar las columnas correctas
 counts_distal <- counts[, metadata_distal$Complete_name]
 metadata_distal$Genotype=as.factor(metadata_distal$Genotype)
 metadata_distal$Time=as.factor(metadata_distal$Time)
+
 ```
-~Time:
+
+MODELO DISTAL ~Time:
 
 ```{r}
-metadata_distal <- metadata_distal %>% 
-  mutate(
-    Time     = factor(Time,     levels = c("6", "24", "72", "144")),
-    Genotype = factor(Genotype, levels = c("VAD2", "MDV2.3", "MDV1"))
-  )
+metadata_distal$Time <- factor(metadata_distal$Time)
 
 dds_distal_time <- DESeqDataSetFromMatrix(
   countData = counts_distal,
@@ -2285,34 +2984,104 @@ dds_distal_time <- DESeqDataSetFromMatrix(
   design = ~ Time
 )
 
-head(rowSums(counts(dds_distal_time)))  
+head(rowSums(counts(dds_distal_time)))  # Ver conteo total por gen, casi todos los genes 0. Eso es que en ninguna muestra hay conteo. No sirven de nada.
+
+##se eliminan y se reduce a 533 genes (que casi todos aparecerán solo una vez):
+dds_distal_time <- dds_distal_time[rowSums(counts(dds_distal_time)) > 0, ]
+
+
 summary(rowSums(counts(dds_distal_time)))
+
+##la mayoría de los genes restantes siguen teniendo conteos extremadamente bajos CREO QUE DESEQ NO TIENE SENTIDO
 colnames(dds_distal_time)
 
+
+##aquí creo la db que utilizo en este análisis.
+# Extraer información de las columnas (genotipo y tiempo)
 sample_info <- data.frame(sample = colnames(dds_distal_time)) %>%
   separate(sample, into = c("Genotipo", "Muestra", "O", "D", "Tiempo"), sep = "[-_]", remove = FALSE)
 
-# factor
+# Convertir el tiempo a factor ordenado
 sample_info$Tiempo <- factor(sample_info$Tiempo, levels = c("6", "24", "72", "144"))
 sample_info$Genotipo=factor(sample_info$Genotipo, levels=c("VAD2","MDV2.3","MDV1"))
+# Ver resultado
+head(sample_info)
 
 
-# Count matrix
+```
+
+Modelo Distal ~Time by Geno
+```{r}
+##asegurar que las variables genotipo y time son factores:
+
+metadata_distal <- metadata_distal %>% 
+  mutate(
+    Time     = factor(Time,     levels = c("6", "24", "72", "144")),
+    Genotype = factor(Genotype, levels = c("VAD2", "MDV2.3", "MDV1"))
+  )
+
+
+
+dds_by_genotype_distal <- list()
+
+# Genotipos que tienes
+genotypes <- unique(metadata_distal$Genotype)
+
+# Bucle para crear y analizar cada uno
+for (g in genotypes) {
+  metadata_sub <- metadata_distal %>% filter(Genotype == g)
+  counts_sub <- counts_distal[, metadata_sub$Complete_name]
+
+  # Filtra genes con demasiados ceros
+  keep <- rowSums(counts_sub > 0) >= 2
+  counts_sub <- counts_sub[keep, ]
+
+  dds <- DESeqDataSetFromMatrix(
+    countData = counts_sub,
+    colData = metadata_sub,
+    design = ~ Time
+  )
+
+  # Corre DESeq2 con método robusto
+  dds <- DESeq(dds, sfType = "poscounts")
+
+  dds_by_genotype_distal[[g]] <- dds
+}
+
+table(keep)
+##me falta el vst
+
+vst_by_genotype_distal <- list()
+
+for (g in names(dds_by_genotype_distal)) {
+  vst_by_genotype_distal[[g]] <- varianceStabilizingTransformation (dds_by_genotype_distal[[g]], blind = TRUE)
+}
+
+##comprobación
+metadata_sub_VAD2=metadata_distal %>% filter(Genotype == "VAD2")
+metadata_sub_VAD2_24=metadata_sub_VAD2 %>% filter(Time == 24)
+
+```
+
+
+FeatureCounts data (mapped reads to genes)
+
+```{r}
+# Obtener matriz de conteos
 count_matrix <- counts(dds_distal_time)
 
-# dframe before pivot_longer()
+# Ver estructura del dataframe antes de pivot_longer()
 str(data.frame(sample_info, t(count_matrix)))
 
-# Create a data frame ensuring that categorical columns are not mixed with the count data
+# Crear dataframe asegurando que las columnas categóricas no se mezclen con los conteos
 df_combined <- bind_cols(sample_info, as.data.frame(t(count_matrix)))
 
-# Counts summary by genotype and time
+# Sumar conteos por genotipo y tiempo
 count_summary <- df_combined %>%
   pivot_longer(cols = starts_with("gene_"), names_to = "Gene", values_to = "Counts") %>% 
   group_by(Genotipo, Tiempo) %>%
   summarise(Ophiostoma_presence = sum(Counts, na.rm = TRUE), .groups = "drop")
 
-##english
 count_summary$Genotype=count_summary$Genotipo
 
 # Ver resultados
@@ -2325,7 +3094,9 @@ df_counts <- df_combined %>%
   group_by(sample, Genotype = Genotipo, Tiempo) %>%   # renombramos aquí
   summarise(total_counts = sum(Counts), .groups = "drop")
 
-##add mean and se
+###############################################################################
+# 2.  RESUMEN (media ± SE)  →  df_summary
+###############################################################################
 df_summary <- df_counts %>%
   group_by(Genotype, Tiempo) %>%
   summarise(mean_counts = mean(total_counts),
@@ -2334,42 +3105,8 @@ df_summary <- df_counts %>%
             .groups     = "drop")
 ```
 
- ~Time by Genotype
 
-```{r}
-dds_by_genotype_distal <- list()
-genotypes <- unique(metadata_distal$Genotype)
-for (g in genotypes) {
-  metadata_sub <- metadata_distal %>% filter(Genotype == g)
-  counts_sub <- counts_distal[, metadata_sub$Complete_name]  # filter
-  keep <- rowSums(counts_sub > 0) >= 2
-  counts_sub <- counts_sub[keep, ]
-  dds <- DESeqDataSetFromMatrix(
-    countData = counts_sub,
-    colData = metadata_sub,
-    design = ~ Time
-  )
-
-  # DESeq2
-  dds <- DESeq(dds, sfType = "poscounts")
-
-  dds_by_genotype_distal[[g]] <- dds
-}
-
-table(keep)
-
-##vst
-vst_by_genotype_distal <- list()
-for (g in names(dds_by_genotype_distal)) {
-  vst_by_genotype_distal[[g]] <- varianceStabilizingTransformation (dds_by_genotype_distal[[g]], blind = TRUE)
-}
-
-##DESeq2 does not make sense here
-metadata_sub_VAD2=metadata_distal %>% filter(Genotype == "VAD2")
-metadata_sub_VAD2_24=metadata_sub_VAD2 %>% filter(Time == 24)
-```
-
-Normalize for library size.
+Corregir por el tamaño de la librería:
 
 ```{r}
 Tamaño_libreria=read.csv("data/for_R_library_correction.csv", sep=";", dec = ",")
@@ -2380,19 +3117,25 @@ Length_library_distal=Tamaño_libreria%>%
 library_distal <- Length_library_distal %>%
   filter(!is.na(Genotype))
 
-#rename
+
+##hasta aquí tamaño de las librerías, pero tenemos que añadir COUNTS.
+
+##cambiamos el nombre a Sample para que cuadre con la bd de abajo y poder 
 library_distal <- library_distal %>%
   rename(sample = Complete_name)
 
-#left join
+
+##hay que coger este dataframe que es el anterior al plot:
 df_counts_distal_library=df_counts %>%
   left_join(library_distal, by="sample")
 
-#select columns
 df_counts_distal_library=df_counts_distal_library[,c(1,2,3,4,5,6,8,9)]
+
 head(df_counts_distal_library)
 
 
+
+###############################################################################
 df_summary_library <- df_counts_distal_library %>%
   group_by(Genotype.x, Tiempo) %>%
   summarise(mean_counts = mean(total_counts),
@@ -2401,55 +3144,63 @@ df_summary_library <- df_counts_distal_library %>%
             Mseqs       = sum(Mseqs),
             .groups     = "drop")
 
+##¿OFFSET OR COVARIATE?: As offset needed, and total mapped reads (ulmus + Ophiostoma), so you avoid circularity.
 
+##########MAJOR REVISION: AS OFFSET NEEDED:
 
-##########HERE HERE HERE #########################
+##total counts y Mseq (numero de lecturas tras el filtrado Dual-RNA):
+cor(df_counts_distal_library$total_counts,
+    df_counts_distal_library$Mseqs)
 
+m_offset <- glm.nb(total_counts ~ Genotype * Tiempo + offset(log(host_pathogen_PE_MAPQ60)), data = df_counts_distal_library)
 
-##¿OFFSET OR COVARIATE?:
-library(MASS)
-library(emmeans)
+##para que en el gráfico salga Genotype y las letras
+df_counts_distal_library$Genotype=df_counts_distal_library$Genotype.x
+m_offset_No_Interaction=glm.nb(total_counts ~ Genotype.x + Tiempo + offset(log(host_pathogen_PE_MAPQ60)), data = df_counts_distal_library)
 
-m_offset <- glm.nb(total_counts ~ Genotype.x * Tiempo + offset(log(Mseqs)), data = df_counts_distal_library)
-m_cov <- glm.nb(total_counts ~ Genotype.x * Tiempo + log(Mseqs), data = df_counts_distal_library)
+AIC(m_offset, m_offset_No_Interaction)
+anova(m_offset, m_offset_No_Interaction, test = "Chisq")
 
-# wich better?
-AIC(m_offset, m_cov)  ## p = 0.0015 < 0.05 the improvement is statistically significant.
-anova(m_offset, m_cov, test = "Chisq") ##χ² = 21.28, df = 1, p < 0.00001
+summary(m_offset)
 
-##¿Interaction?
-##without interacción:
-model_final <- glm.nb(total_counts ~ Genotype.x + Tiempo + log(Mseqs), data = df_counts_distal_library)
-##con interacción:
-model_final2 <- glm.nb(total_counts ~ Genotype.x * Tiempo + log(Mseqs), data = df_counts_distal_library) ##la interacción funciona mejor.
-AIC(model_final, model_final2)
-anova(model_final, model_final2, test = "Chisq")
-
-##with interaction and log(Mseqs)
-
-##signitfivativo en qué tiempo:
-
-##Asterisks indicate significant differences relative to the resistant genotype (R-VAD2) at the same time point according to a negative binomial generalized ##linear model (GLM) adjusted for library size. 
-
-summary(model_final2) ##here are the results for the figure 5.
 ```
 
-Figure 5 GRAPH:
+
+Compare:
 
 ```{r}
+library(emmeans)
+packageVersion("emmeans")
+package.version(emmeans)
 
-# Asegurar factores y referencias
-df_DISTAL_model <- df_counts_distal_library %>%
+emm <- emmeans(m_offset, ~ Genotype | Tiempo)
+pairs(emm, adjust = "tukey")
+
+cld_res <- cld(
+  emm,
+  adjust = "tukey",
+  Letters = letters
+)
+
+cld_res
+```
+
+Graph with letters:
+
+```{r}
+letters_df <- as.data.frame(cld_res)
+
+
+##cuidado con el orden
+letters_df <- df_summary %>%
   mutate(
-    Genotype.x = factor(Genotype.x, levels = c("MDV1","MDV2.3","VAD2")),
-    Tiempo     = factor(Tiempo,     levels = c("6","24","72","144")),
-    # Evita ceros o negativos en Mseqs si vas a usar offset:
-    Mseqs      = as.numeric(Mseqs)
+    label = c("a","a","a", "a",
+              "a","a","ab", "a",
+              "a","a","b", "b"),
+    
+    y_lab = mean_counts + se_counts + 5
   )
 
-pos=position_dodge(0.9)
-
-# Gráfico con asteriscos
 plot_ophiostoma <- ggplot(df_summary,
                           aes(x = factor(Tiempo, levels = sort(unique(Tiempo))),
                               y = mean_counts,
@@ -2458,34 +3209,44 @@ plot_ophiostoma <- ggplot(df_summary,
   geom_errorbar(aes(ymin = mean_counts - se_counts,
                     ymax = mean_counts + se_counts),
                 width = 0.2, position = pos) +
-    scale_fill_manual(values = c(
-    "VAD2" = "#F26553",
-    "MDV2.3" = "#009E73",
-    "MDV1" = "#6E9FC6"
-  ),
-  labels = c(
-    "VAD2" = "R-VAD2",
-    "MDV2.3" = "R-MDV2.3",
-    "MDV1" = "S-MDV1"
+  scale_fill_manual(values = c(
+    "R-VAD2"   = "#F2644D",
+    "R-MDV2.3" = "#0FA37A",
+    "S-MDV1"   = "#729FC9"
   )) +
+ geom_text(
+  data = letters_df,
+  aes(
+    x = factor(Tiempo),
+    y = y_lab,
+    label = label,
+    group = Genotype
+  ),
+  position = pos,
+  size = 5,
+  vjust = 0,
+  inherit.aes = FALSE
+  )+
   labs(
     title = "",
     x = "hpi",
-    y = "Mean read counts ± SE"
+  y = expression("Reads assigned to " * italic(Ophiostoma) * " genes " %+-% SE)
   ) +
   theme_minimal(base_size = 16) +
   theme(
     axis.text.x  = element_text(angle = 45, hjust = 1, size = 16),
     axis.text.y  = element_text(size = 16),
-    axis.title.x = element_text(size = 18),
+    axis.title.x = element_text(size = 14),
     axis.title.y = element_text(size = 18),
-    plot.title   = element_text(size = 20, face = "bold", hjust = 0.5),
     legend.title = element_text(size = 18),
     legend.text  = element_text(size = 16),
     legend.key.size = unit(1.1, "cm")
   )
 
 print(plot_ophiostoma)
+
 ```
 
 END.
+
+
